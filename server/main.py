@@ -1,18 +1,28 @@
-# Importing flask module in the project is mandatory
-# An object of Flask class is our WSGI application.
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.services.inference import app as inference_app
 from flask import Flask
+import numpy
 
-# Flask constructor takes the name of 
-# current module (__name__) as argument.
-app = Flask(__name__)
+# Create the main FastAPI app
+app = FastAPI()
 
-# The route() function of the Flask class is a decorator, 
-# which tells the application which URL should call 
-# the associated function.
-@app.route('/')
-# ‘/’ URL is bound with hello_world() function.
-def hello_world():
-    return 'Hello World'
+# Mount the inference API to the main app (if modularized)
+app.mount("/inference", inference_app)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Add your frontend URL here
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+# Root endpoint (optional)
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the ONNX Inference API!"}
 
 # main driver function
 if __name__ == '__main__':
