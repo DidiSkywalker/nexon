@@ -33,7 +33,7 @@ Run the FastAPI backend:
 ```bash
 uvicorn main:app --reload
 ```
-### **3. Set Up the Forntend**
+### **3. Set Up the Frontend**
 Open a new terminal and navigate to the frontend directory:
 ```bash
 cd frontend
