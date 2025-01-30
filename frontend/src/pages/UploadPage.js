@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import axios from "axios";
-import modelStorage from "../components/ModelStorage"
 
 const Upload = () => {
   const [file, setFile] = useState(null);
