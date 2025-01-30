@@ -25,7 +25,7 @@ cd server
 python -m venv onnx_platform_env 
 source onnx_platform_env/bin/activate  # (Windows: onnx_platform_env\Scripts\activate)
 ```
-if this doesn't work try using ```bash python3```.
+if this doesn't work try using ```python3```.
 
 Install dependencies: 
 ```bash
