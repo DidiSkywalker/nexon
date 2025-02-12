@@ -1,8 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const navigate = useNavigate();
+  const [hoveredMenu, setHoveredMenu] = useState(null);
+
+  const handleMouseEnter = (menuItem) => {
+    setHoveredMenu(menuItem);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredMenu(null);
+  };
 
   const navToUploadPage = () => {
     navigate('/upload');
@@ -13,19 +22,34 @@ const Home = () => {
   const navToInferencePage = () => {
     navigate('/inference');
   };
+
   return (
     <div style={styles.container}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
-      
+
       {/* Header Section */}
       <header style={styles.header}>
         <div style={styles.logo}>NEXON</div>
         <nav style={styles.nav}>
-          <a href="#upload" style={styles.navLink} onClick={navToUploadPage}>Upload</a>
-          <a href="#deploy" style={styles.navLink} onClick={navToDeployPage}>Deploy</a>
-          <a href="#infer" style={styles.navLink} onClick={navToInferencePage}>Inference</a>
-          <a href="#faq" style={styles.navLink}>Metadata Management</a>
-          <a href="#contact" style={styles.navLink}>History</a>
+          {["Upload", "Deploy", "Inference", "Metadata Management", "Deployed Models"].map((item, index) => (
+            <span
+              key={index}
+              onClick={
+                item === "Upload" ? navToUploadPage :
+                item === "Deploy" ? navToDeployPage :
+                item === "Inference" ? navToInferencePage :
+                undefined
+              }
+              style={{
+                ...styles.menuButton,
+                fontWeight: hoveredMenu === item ? "bold" : "normal",
+              }}
+              onMouseEnter={() => handleMouseEnter(item)}
+              onMouseLeave={handleMouseLeave}
+            >
+              {item}
+            </span>
+          ))}
         </nav>
         <div style={styles.profileContainer}>
           <i className="material-icons" style={styles.profile}>person</i>
@@ -74,19 +98,13 @@ const styles = {
     display: "flex",
     gap: "20px",
   },
-  navLink: {
-    color: "#fff",
-    textDecoration: "none",
-    fontSize: "16px",
-    transition: "color 0.3s ease",
-  },
   profileContainer: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
   },
   profile: {
-    fontSize: "40px", // Enlarged the person icon
+    fontSize: "40px",
     color: "#fff",
     cursor: "pointer",
     transition: "color 0.3s ease",
@@ -100,12 +118,12 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    height: "80vh", // Reduced height to move it up
-    backgroundImage: `url('https://via.placeholder.com/1920x1080')`, // Replace this with a suitable AI/cloud image
+    height: "80vh",
+    backgroundImage: `url('https://via.placeholder.com/1920x1080')`,
     backgroundSize: "cover",
     backgroundPosition: "center",
     textAlign: "center",
-    marginTop: "-50px", // Added negative margin to move it closer to the header
+    marginTop: "-50px",
   },
   heroContent: {
     backgroundColor: "rgba(0, 0, 0, 0.5)",
@@ -134,6 +152,10 @@ const styles = {
     fontSize: "20px",
     fontWeight: "bold",
     transition: "background-color 0.3s ease",
+  },
+  menuButton: {
+    cursor: "pointer",
+    transition: "font-weight 0.2s ease",
   },
 };
 

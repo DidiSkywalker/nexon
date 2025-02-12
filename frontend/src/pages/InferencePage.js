@@ -1,36 +1,33 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const Inference = () => {
-  const [file, setFile] = useState(null);
+  const navigate = useNavigate();
   const [inputs, setInputs] = useState("");
   const [results, setResults] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("");
 
-  const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
+  // Fetch available models from the backend
+  useEffect(() => {
+    axios.get("http://127.0.0.1:8000/deployedModels")
+      .then(response => {
+        setModels(response.data || []); // Ensure we get an array
+      })
+      .catch(error => {
+        console.error("Error fetching models:", error);
+      });
+  }, []);
+
+  const handleModelChange = (event) => {
+    setSelectedModel(event.target.value);
   };
+
 
   const handleInputChange = (event) => {
     setInputs(event.target.value);
-  };
-
-  const handleUploadModel = async () => {
-    if (!file) {
-      setStatusMessage("Please upload an ONNX model file.");
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await axios.post("http://127.0.0.1:8000/inference/upload-model/", formData);
-
-      setStatusMessage(response.data.message);
-    } catch (error) {
-      setStatusMessage("Error uploading model: " + error.response?.data?.detail || error.message);
-    }
   };
 
   const handleRunInference = async () => {
@@ -42,16 +39,29 @@ const Inference = () => {
     try {
       const inputData = JSON.parse(inputs);
 
-      const response = await axios.post("http://127.0.0.1:8000/inference/infer/", { inputs: inputData });
+      const response = await axios.post("http://127.0.0.1:8000/inference/infer/" + selectedModel, { input: inputData });
 
       setResults(response.data.results);
       setStatusMessage("Inference completed successfully!");
     } catch (error) {
-      setStatusMessage("Error during inference: " + error.response?.data?.detail || error.message);
+      setStatusMessage("Error during inference: " + (error.response?.data?.detail || error.message));
     }
+  };
+  const goBack = () => {
+    navigate(-1); // Go to the previous page
+  };
+  const navToHomePage = () => {
+    navigate('/home');
   };
 
   return (
+    <div style={styles.outerContainer}>
+      <div style={styles.backButtonContainer}>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
+      <i class="material-icons" style={styles.homeIcon} onClick={navToHomePage}>home</i>
+      {/* Back Button */}
+      <button onClick={goBack} style={styles.backButton}>← Back</button>
+      </div>
     <div style={styles.container}>
       {/* Input Section */}
       <div style={styles.inputSection}>
@@ -60,14 +70,17 @@ const Inference = () => {
           Upload your ONNX model, provide input data, and view the results.
         </p>
 
-        {/* Upload Model */}
-        <div style={styles.section}>
-          <label style={styles.label}>Upload ONNX Model:</label>
-          <input type="file" onChange={handleFileChange} style={styles.fileInput} />
-          <button onClick={handleUploadModel} style={styles.button}>
-            Upload Model
-          </button>
+          {/* Select Model */}
+          <div style={styles.section}>
+          <p style={styles.description}>Select a deployed model:</p>
+          <select value={selectedModel} onChange={handleModelChange} style={styles.dropdown}>
+            <option value="">-- Select a Model --</option>
+            {models.map((model, index) => (
+              <option key={index} value={model}>{model}</option>
+            ))}
+          </select>
         </div>
+
 
         {/* Input Data */}
         <div style={styles.section}>
@@ -103,17 +116,26 @@ const Inference = () => {
         </div>
       </div>
     </div>
+    </div>
   );
 };
 
 export default Inference;
 
 const styles = {
+  outerContainer: {
+    display: "flex",
+    height: "100vh",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    backgroundColor: "#1f1f2e",
+    color: "#fff",
+  },
   container: {
     display: "flex",
+    height: "95vh",
     flexDirection: "row",
     justifyContent: "space-between",
-    height: "100vh",
     backgroundColor: "#1f1f2e",
     fontFamily: "'Roboto', sans-serif",
     color: "#fff",
@@ -159,7 +181,7 @@ const styles = {
     cursor: "pointer",
   },
   textarea: {
-    width: "100%",
+    width: "97%",
     padding: "10px",
     fontSize: "14px",
     color: "#fff",
@@ -167,7 +189,7 @@ const styles = {
     border: "1px solid #6a11cb",
     borderRadius: "8px",
     outline: "none",
-    height: "100px",
+    height: "340px",
   },
   button: {
     backgroundColor: "#2575fc",
@@ -210,13 +232,45 @@ const styles = {
     maxHeight: "80vh",
     overflow: "auto",
   },
-  resultsContent: {
+  dropdown: {
+    width: "100%",
+    padding: "10px",
     fontSize: "14px",
     color: "#fff",
-    whiteSpace: "pre-wrap",
+    backgroundColor: "#1f1f2e",
+    border: "1px solid #6a11cb",
+    borderRadius: "8px",
+    marginBottom: "20px",
+    outline: "none",
+    cursor: "pointer",
   },
-  placeholderText: {
-    fontSize: "14px",
+  orText: {
+    fontSize: "16px",
+    fontWeight: "bold",
+    margin: "20px 0",
     color: "#c2c2c2",
+    textAlign: "center"
+  },
+  backButton: {
+    position: "absolute",
+    top: "20px",
+    left: "20px",
+    background: "transparent",
+    boxShadow: "none",
+    border: "none",
+    fontSize: "16px",
+    cursor: "pointer",
+    shadow: "none",
+  },
+  homeIcon: {
+    position: "absolute",
+    cursor: "pointer",
+    top: "25px",
+    right: "25px",
+    fontSize: "200%"
+
+  },
+  backButtonContainer: {
+    position: "relative",
   },
 };

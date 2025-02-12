@@ -13,7 +13,7 @@ output_name = None
 
 # Request body for inference
 class InferenceRequest(BaseModel):
-    inputs: list
+    input: list
 
 
 @app.post("/upload-model/")
@@ -49,19 +49,23 @@ async def upload_model(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error initializing model: {str(e)}")
 
 
-@app.post("/infer/")
-async def infer(request: InferenceRequest):
+@app.post("/infer/{model_name}")
+async def infer(request: InferenceRequest, model_name):
     """
     Runs inference on the uploaded ONNX model with the given inputs.
     """
     global session, input_name, output_name
 
+    model_path = f"app/deployedModels/{model_name}"
+
     if session is None:
-        raise HTTPException(status_code=400, detail="No model has been chosen yet.")
+         session = ort.InferenceSession(model_path)
 
     try:
         # Convert input data to NumPy array
-        input_data = np.array(request.inputs).astype(np.float32)
+        input_data = np.array(request.input).astype(np.float32)
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
 
         # Check input shape compatibility
         expected_shape = session.get_inputs()[0].shape

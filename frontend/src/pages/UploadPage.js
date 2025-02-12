@@ -1,12 +1,24 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const Upload = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [uploadMessage, setUploadMessage] = useState("");
 
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
+  };
+
+  const navToDeploymentPage = () => {
+    navigate('/deploy');
+  };
+  const navToHomePage = () => {
+    navigate('/home');
+  };
+  const goBack = () => {
+    navigate(-1); // Go to the previous page
   };
 
   const handleUpload = async () => {
@@ -15,44 +27,47 @@ const Upload = () => {
       return;
     }
 
-    // Simulated upload process (replace with actual upload logic if needed)
     try {
       const formData = new FormData();
       formData.append("file", file);
 
-      // Example API call to upload the file (uncomment and adjust URL when needed)
-      // await axios.post('your-api-endpoint', formData);
+      const response = await axios.post("http://127.0.0.1:8000/upload/", formData);
 
-      setUploadMessage("File uploaded successfully!");
+      setUploadMessage(response.data.message);
     } catch (error) {
-      setUploadMessage("Failed to upload the file. Please try again.");
+      setUploadMessage("Error uploading model: " + (error.response?.data?.detail || error.message));
     }
   };
 
   return (
     <div style={styles.container}>
-      {/* Upload Card */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
+      <i class="material-icons" style={styles.homeIcon} onClick={navToHomePage}>home</i>
+      {/* Back Button */}
+      <button onClick={goBack} style={styles.backButton}>← Back</button>
       <div style={styles.uploadCard}>
         <h1 style={styles.title}>Upload Your ONNX Model</h1>
         <p style={styles.description}>
           Select your ONNX model file to upload and deploy it on the platform.
         </p>
 
-        {/* File Input */}
-        <input
-          type="file"
-          onChange={handleFileChange}
-          style={styles.fileInput}
-        />
+        <input type="file" onChange={handleFileChange} style={styles.fileInput} />
 
-        {/* Upload Button */}
         <button onClick={handleUpload} style={styles.uploadButton}>
           Upload
         </button>
 
-        {/* Upload Status Message */}
-        {uploadMessage && (
-          <p style={styles.uploadMessage}>{uploadMessage}</p>
+        {uploadMessage && <p style={styles.uploadMessage}>{uploadMessage}</p>}
+
+        {file && uploadMessage.includes("successfully") && (
+          <div style={styles.buttonContainer}>
+            <button style={styles.navButton} onClick={navToDeploymentPage}>
+              Deploy the model
+            </button>
+            <button style={styles.navButton} onClick={navToHomePage}>
+              Go back to Home Page
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -70,6 +85,7 @@ const styles = {
     backgroundColor: "#1f1f2e",
     fontFamily: "'Roboto', sans-serif",
     color: "#fff",
+    position: "relative",
   },
   uploadCard: {
     backgroundColor: "#2a2a3c",
@@ -112,12 +128,45 @@ const styles = {
     cursor: "pointer",
     transition: "background-color 0.3s ease",
   },
-  uploadButtonHover: {
-    backgroundColor: "#6a11cb",
-  },
   uploadMessage: {
     marginTop: "20px",
     fontSize: "14px",
     color: "#6a11cb",
   },
+  buttonContainer: {
+    display: "flex",
+    justifyContent: "center",
+    gap: "10px",
+    marginTop: "15px",
+  },
+  navButton: {
+    backgroundColor: "#2575fc",
+    color: "#fff",
+    padding: "10px 15px",
+    borderRadius: "8px",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "14px",
+    fontWeight: "bold",
+    transition: "background-color 0.3s ease",
+  },
+  backButton: {
+    position: "absolute",
+    top: "20px",
+    left: "20px",
+    background: "none",
+    boxShadow: "none",
+    border: "none",
+    fontSize: "16px",
+    cursor: "pointer",
+    shadow: "none"
+  },
+  homeIcon: {
+    position: "absolute",
+    cursor: "pointer",
+    top: "25px",
+    right: "25px",
+    fontSize: "200%"
+
+  }
 };
