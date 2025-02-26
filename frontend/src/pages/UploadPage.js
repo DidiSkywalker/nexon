@@ -12,7 +12,7 @@ const Upload = () => {
   };
 
   const navToDeploymentPage = () => {
-    navigate('/deploy');
+    navigate(`/deploy?model=${file.name}`);
   };
   const navToHomePage = () => {
     navigate('/home');
@@ -26,6 +26,8 @@ const Upload = () => {
       setUploadMessage("Please select a file before uploading.");
       return;
     }
+
+    setUploadMessage("Uploading model...");
 
     try {
       const formData = new FormData();

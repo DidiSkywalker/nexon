@@ -3,8 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.services.inference import app as inference_app
 from app.services.deployment import app as deployment_app
 from app.services.upload import app as upload_app
-import os
-import re
+from app.services.database import fs, models_collection
 
 # Create the main FastAPI app
 app = FastAPI()
@@ -17,7 +16,7 @@ app.mount("/upload", upload_app)
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  #frontend URL
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -28,17 +27,35 @@ app.add_middleware(
 async def root():
     return {"message": "Welcome to the ONNX Inference API!"}
 
-@app.get("/uploadedModels")
-async def getUploadedModels():
-  regex = re.compile("^\\.")
-  files = [fileName for fileName in os.listdir("app/models") if not regex.match(fileName)]
-  return files
 
 @app.get("/deployedModels")
 async def getUploadedModels():
-  regex = re.compile("^\\.")
-  files = [fileName for fileName in os.listdir("app/deployedModels") if not regex.match(fileName)]
-  return files
+    models = await models_collection.find({"status": "Deployed"}).to_list()
+    for model in models:
+        model["_id"] = str(model["_id"])
+        model["file_id"] = str(model["file_id"])
+        
+    return models
+
+@app.get("/uploadedModels")
+async def getUploadedModels():
+    models = await models_collection.find({"status": "Uploaded"}).to_list()
+    for model in models:
+        model["_id"] = str(model["_id"])
+        model["file_id"] = str(model["file_id"])
+        
+    return models
+
+@app.get("/allModels")
+async def getAllModels():
+    models = await models_collection.find().to_list()
+    for model in models:
+        model["_id"] = str(model["_id"])
+        model["file_id"] = str(model["file_id"])
+        
+    return models
+    
+
 
 # main driver function
 if __name__ == '__main__':

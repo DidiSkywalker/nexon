@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Deploy = () => {
   const [selectedModel, setSelectedModel] = useState("");
@@ -9,17 +9,23 @@ const Deploy = () => {
   const [inferenceEndpoint, setInferenceEndpoint] = useState("");
   const [models, setModels] = useState([]);
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const selectedModelFromURL = queryParams.get("model"); 
 
   // Fetch available models from the backend
   useEffect(() => {
     axios.get("http://127.0.0.1:8000/uploadedModels")
       .then(response => {
-        setModels(response.data || []); // Ensure we get an array
+        setModels(response.data || []); 
+        if (selectedModelFromURL) {
+          setSelectedModel(selectedModelFromURL);
+        }
       })
       .catch(error => {
         console.error("Error fetching models:", error);
       });
-  }, []);
+  }, [selectedModelFromURL]);
 
   const handleModelChange = (event) => {
     setSelectedModel(event.target.value);
@@ -57,8 +63,10 @@ const Deploy = () => {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
+        const model = models.find(model => model.name === selectedModel);
         response = await axios.post("http://127.0.0.1:8000/deployment/deploy-model/", {
           model_name: selectedModel,
+          model_id: model._id,
         });
       }
 
@@ -83,8 +91,8 @@ const Deploy = () => {
 
         <select value={selectedModel} onChange={handleModelChange} style={styles.dropdown}>
           <option value="">-- Select a Model --</option>
-          {models.map((model, index) => (
-            <option key={index} value={model}>{model}</option>
+          {models.map((model) => (
+            <option key={model.id} value={model.name}>{model.name}</option>
           ))}
         </select>
 
@@ -112,7 +120,7 @@ const Deploy = () => {
             <p style={styles.orText}>OR</p>
             <div style={styles.apiBox}>
               <p>Try our Inference Page:</p>
-              <button onClick={() => navigate("/inference")} style={styles.inferenceButton}>
+              <button onClick={() => navigate(`/inference?model=${selectedModel || file.name}`)} style={styles.inferenceButton}>
                 Go to Inference Page
               </button>
             </div>

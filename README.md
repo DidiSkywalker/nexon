@@ -18,7 +18,29 @@ The **ONNX Deployment Platform** NEXON is a web-based application that allows us
 git clone https://github.com/husseinMegahed/onnx-deployment-platform.git
 cd onnx-deployment-platform
 ```
-### **2. Set Up the Backend**
+### **2. Set Up MongoDB**
+NEXON uses MongoDB to store uploaded models and their metadata.
+#### **2.1 Install MongoDB
+Mac: 
+```bash
+brew install mongodb-community@7.0
+```
+Ubuntu: 
+```bash
+sudo apt update
+sudo apt install -y mongodb
+```
+Windows(Chocolatey): 
+```bash
+choco install mongodb
+```
+Or use your preferred package manager
+#### **2.2 Start MongoDB Locally
+```bash
+mongod --dbpath=/data/db
+```
+
+### **3. Set Up the Backend**
 Navigate to the server directory and create a virtual environment:
 ```bash
 cd server
@@ -35,7 +57,7 @@ Run the FastAPI backend:
 ```bash
 uvicorn main:app --reload
 ```
-### **3. Set Up the Frontend**
+### **4. Set Up the Frontend**
 Open a new terminal and navigate to the frontend directory:
 ```bash
 cd frontend

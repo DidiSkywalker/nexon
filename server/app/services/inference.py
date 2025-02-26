@@ -2,51 +2,22 @@ import onnxruntime as ort
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from pydantic import BaseModel
+from .database import fs, models_collection
+from bson import ObjectId
 
 app = FastAPI()
-
-# Global variables to store session and model information
-session = None
-input_name = None
-output_name = None
 
 
 # Request body for inference
 class InferenceRequest(BaseModel):
     input: list
 
+onnx_to_numpy_dtype = {
+    "tensor(float)": np.float32,
+    "tensor(int64)": np.int64,
+    "tensor(double)": np.float64
+}
 
-@app.post("/upload-model/")
-async def upload_model(file: UploadFile = File(...)):
-    """
-    Uploads an ONNX model file and initializes an inference session.
-    """
-    global session, input_name, output_name
-
-    if not file.filename.endswith(".onnx"):
-        raise HTTPException(status_code=400, detail="Only ONNX files are allowed.")
-
-    try:
-        # Save the uploaded model to disk
-        model_path = f"app/models/{file.filename}"
-        with open(model_path, "wb") as f:
-            f.write(await file.read())
-
-        # Initialize ONNX session
-        session = ort.InferenceSession(model_path)
-
-        # Get input and output details
-        input_name = session.get_inputs()[0].name
-        output_name = session.get_outputs()[0].name
-
-        return {
-            "message": f"Model {file.filename} uploaded and initialized successfully.",
-            "input_name": input_name,
-            "output_name": output_name,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error initializing model: {str(e)}")
 
 
 @app.post("/infer/{model_name}")
@@ -54,26 +25,27 @@ async def infer(request: InferenceRequest, model_name):
     """
     Runs inference on the uploaded ONNX model with the given inputs.
     """
-    global session, input_name, output_name
-
-    model_path = f"app/deployedModels/{model_name}"
-
-    if session is None:
-         session = ort.InferenceSession(model_path)
+    grid_out = await fs.open_download_stream_by_name(model_name)
+    model_bytes = await grid_out.read()
+    session = ort.InferenceSession(model_bytes)
 
     try:
         # Convert input data to NumPy array
-        input_data = np.array(request.input).astype(np.float32)
+        
+        type = onnx_to_numpy_dtype.get(session.get_inputs()[0].type)
+        input_data = np.array(request.input).astype(type)
+        input_data = request.input
         input_name = session.get_inputs()[0].name
         output_name = session.get_outputs()[0].name
 
-        # Check input shape compatibility
+       #Currently poses some problems because the shape format isn't always the same and mismatching shapes do not necessarily lead to an error
+       # Check input shape compatibility
         expected_shape = session.get_inputs()[0].shape
-        if list(input_data.shape) != expected_shape:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Input shape mismatch. Expected: {expected_shape}, Received: {list(input_data.shape)}",
-            )
+        # if list(input_data.shape) != expected_shape:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail=f"Input shape mismatch. Expected: {expected_shape}, Received: {list(input_data.shape)}",
+        #     )
 
         # Run inference
         results = session.run([output_name], {input_name: input_data})

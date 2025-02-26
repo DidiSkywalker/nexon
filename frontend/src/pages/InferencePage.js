@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Inference = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const selectedModelFromURL = queryParams.get("model"); 
+
   const [inputs, setInputs] = useState("");
   const [results, setResults] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -14,32 +18,41 @@ const Inference = () => {
   useEffect(() => {
     axios.get("http://127.0.0.1:8000/deployedModels")
       .then(response => {
-        setModels(response.data || []); // Ensure we get an array
+        setModels(response.data || []); 
+        if (selectedModelFromURL) {
+          setSelectedModel(selectedModelFromURL);
+        }
       })
-      .catch(error => {
-        console.error("Error fetching models:", error);
-      });
-  }, []);
+      .catch(error => console.error("Error fetching models:", error));
+  }, [selectedModelFromURL]);
 
   const handleModelChange = (event) => {
     setSelectedModel(event.target.value);
   };
-
 
   const handleInputChange = (event) => {
     setInputs(event.target.value);
   };
 
   const handleRunInference = async () => {
+    if (!selectedModel) {
+      setStatusMessage("Please select a model.");
+      return;
+    }
     if (!inputs) {
       setStatusMessage("Please provide input data for inference.");
       return;
     }
 
+    setStatusMessage("Running inference...")
+
     try {
       const inputData = JSON.parse(inputs);
-
-      const response = await axios.post("http://127.0.0.1:8000/inference/infer/" + selectedModel, { input: inputData });
+      console.log(inputData)
+      const response = await axios.post(`http://127.0.0.1:8000/inference/infer/${selectedModel}`, { 
+      input: inputData,
+      headers: { "Content-Type": "application/json" }
+     });
 
       setResults(response.data.results);
       setStatusMessage("Inference completed successfully!");
@@ -47,75 +60,64 @@ const Inference = () => {
       setStatusMessage("Error during inference: " + (error.response?.data?.detail || error.message));
     }
   };
-  const goBack = () => {
-    navigate(-1); // Go to the previous page
-  };
-  const navToHomePage = () => {
-    navigate('/home');
-  };
+
+  const goBack = () => navigate(-1);
+  const navToHomePage = () => navigate('/home');
 
   return (
     <div style={styles.outerContainer}>
       <div style={styles.backButtonContainer}>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
-      <i class="material-icons" style={styles.homeIcon} onClick={navToHomePage}>home</i>
-      {/* Back Button */}
-      <button onClick={goBack} style={styles.backButton}>← Back</button>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
+        <i className="material-icons" style={styles.homeIcon} onClick={navToHomePage}>home</i>
+        <button onClick={goBack} style={styles.backButton}>← Back</button>
       </div>
-    <div style={styles.container}>
-      {/* Input Section */}
-      <div style={styles.inputSection}>
-        <h1 style={styles.title}>Run Inference</h1>
-        <p style={styles.description}>
-          Upload your ONNX model, provide input data, and view the results.
-        </p>
+      <div style={styles.container}>
+        {/* Input Section */}
+        <div style={styles.inputSection}>
+          <h1 style={styles.title}>Run Inference</h1>
+          <p style={styles.description}>Select a deployed model and provide input data.</p>
 
           {/* Select Model */}
           <div style={styles.section}>
-          <p style={styles.description}>Select a deployed model:</p>
-          <select value={selectedModel} onChange={handleModelChange} style={styles.dropdown}>
-            <option value="">-- Select a Model --</option>
-            {models.map((model, index) => (
-              <option key={index} value={model}>{model}</option>
-            ))}
-          </select>
+            <p style={styles.description}>Select a deployed model:</p>
+            <select value={selectedModel} onChange={handleModelChange} style={styles.dropdown}>
+              <option value="">-- Select a Model --</option>
+              {models.map((model, index) => (
+                <option key={index} value={model.name}>{model.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Input Data */}
+          <div style={styles.section}>
+            <label style={styles.label}>Input Data (JSON format):</label>
+            <textarea
+              value={inputs}
+              onChange={handleInputChange}
+              style={styles.textarea}
+              placeholder='e.g., [[1.0, 2.0, 3.0]]'
+            />
+          </div>
+
+          {/* Run Inference */}
+          <button onClick={handleRunInference} style={styles.button}>Run Inference</button>
+
+          {/* Status Message */}
+          {statusMessage && <p style={styles.statusMessage}>{statusMessage}</p>}
         </div>
 
-
-        {/* Input Data */}
-        <div style={styles.section}>
-          <label style={styles.label}>Input Data (JSON format):</label>
-          <textarea
-            value={inputs}
-            onChange={handleInputChange}
-            style={styles.textarea}
-            placeholder='e.g., [[1.0, 2.0, 3.0]]'
-          />
-        </div>
-
-        {/* Run Inference */}
-        <button onClick={handleRunInference} style={styles.button}>
-          Run Inference
-        </button>
-
-        {/* Status Message */}
-        {statusMessage && <p style={styles.statusMessage}>{statusMessage}</p>}
-      </div>
-
-      {/* Results Section */}
-      <div style={styles.resultsSection}>
-        <h2 style={styles.resultsTitle}>Results</h2>
-        <div style={styles.resultsBox}>
-          {results ? (
-            <pre style={styles.resultsContent}>
-              {JSON.stringify(results, null, 2)}
-            </pre>
-          ) : (
-            <p style={styles.placeholderText}>Results will appear here.</p>
-          )}
+        {/* Results Section */}
+        <div style={styles.resultsSection}>
+          <h2 style={styles.resultsTitle}>Results</h2>
+          <div style={styles.resultsBox}>
+            {results ? (
+              <pre style={styles.resultsContent}>{JSON.stringify(results, null, 2)}</pre>
+            ) : (
+              <p style={styles.placeholderText}>Results will appear here.</p>
+            )}
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 };
@@ -147,6 +149,7 @@ const styles = {
     borderRadius: "12px",
     margin: "20px",
     boxShadow: "0 4px 8px rgba(0, 0, 0, 0.3)",
+    overflow: "auto"
   },
   title: {
     fontSize: "24px",
@@ -167,18 +170,6 @@ const styles = {
     color: "#c2c2c2",
     marginBottom: "10px",
     display: "block",
-  },
-  fileInput: {
-    width: "100%",
-    padding: "10px",
-    fontSize: "14px",
-    color: "#fff",
-    backgroundColor: "#1f1f2e",
-    border: "1px solid #6a11cb",
-    borderRadius: "8px",
-    marginBottom: "10px",
-    outline: "none",
-    cursor: "pointer",
   },
   textarea: {
     width: "97%",
@@ -229,7 +220,7 @@ const styles = {
     padding: "10px",
     borderRadius: "8px",
     border: "1px solid #6a11cb",
-    maxHeight: "80vh",
+    maxHeight: "70vh",
     overflow: "auto",
   },
   dropdown: {
@@ -274,3 +265,4 @@ const styles = {
     position: "relative",
   },
 };
+

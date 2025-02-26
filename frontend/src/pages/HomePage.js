@@ -22,6 +22,10 @@ const Home = () => {
   const navToInferencePage = () => {
     navigate('/inference');
   };
+  const navToOverview = () => {
+    navigate('/overview');
+  };
+
 
   return (
     <div style={styles.container}>
@@ -31,13 +35,14 @@ const Home = () => {
       <header style={styles.header}>
         <div style={styles.logo}>NEXON</div>
         <nav style={styles.nav}>
-          {["Upload", "Deploy", "Inference", "Metadata Management", "Deployed Models"].map((item, index) => (
+          {["Upload", "Deploy", "Inference", "Metadata Management", "Model Overview"].map((item, index) => (
             <span
               key={index}
               onClick={
                 item === "Upload" ? navToUploadPage :
                 item === "Deploy" ? navToDeployPage :
                 item === "Inference" ? navToInferencePage :
+                item === "Model Overview" ? navToOverview :
                 undefined
               }
               style={{
