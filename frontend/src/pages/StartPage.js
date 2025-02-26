@@ -56,6 +56,10 @@ const Start = () => {
                     <label style={styles.label} htmlFor="password">Password</label>
                     <div style={styles.passwordContainer}>
                         <input
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {navToHomePage();}
+                                }
+                            }
                             type={showPassword ? "text" : "password"}
                             id="password"
                             name="password"
