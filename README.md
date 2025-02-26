@@ -20,7 +20,7 @@ cd onnx-deployment-platform
 ```
 ### **2. Set Up MongoDB**
 NEXON uses MongoDB to store uploaded models and their metadata.
-#### **2.1 Install MongoDB
+#### 2.1 Install MongoDB
 Mac: 
 ```bash
 brew install mongodb-community@7.0
@@ -35,7 +35,7 @@ Windows(Chocolatey):
 choco install mongodb
 ```
 Or use your preferred package manager
-#### **2.2 Start MongoDB Locally
+#### 2.2 Start MongoDB Locally
 ```bash
 mongod --dbpath=/data/db
 ```
