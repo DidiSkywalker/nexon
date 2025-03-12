@@ -6,6 +6,7 @@ const ModelOverview = () => {
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState(null); 
   const navigate = useNavigate();
+  const [notification, setNotification] = useState("");
 
   useEffect(() => {
     axios.get("http://127.0.0.1:8000/allModels")
@@ -15,6 +16,53 @@ const ModelOverview = () => {
       .catch(error => console.error("Error fetching models:", error));
   }, []);
 
+  const deleteModel = async (modelName, modelVersion) => {
+  try {
+    const response = await axios.delete(`http://127.0.0.1:8000/deleteModel/${modelName}/${modelVersion}`
+    );
+    setNotification(`✅ ${response.data.message}`);
+
+    // Remove the notification after 3 seconds
+    setTimeout(() => setNotification(""), 3000);
+
+    // Update state to remove deleted model
+    setModels(models.filter((model) => model.name !== modelName || model.version !== modelVersion));
+
+  } catch (error) {
+    setNotification("❌ Failed to delete model.");
+    setTimeout(() => setNotification(""), 3000);
+  }
+  }
+
+  const undeployModel = async (modelName, modelVersion) => {
+    try {
+      // Send a request to the backend to undeploy the model
+      const response = await axios.put(`http://127.0.0.1:8000/deployment/undeploy/${modelName}`, {
+         model_name: modelName,
+         model_version: modelVersion 
+    });
+  
+      // Show success notification
+      setNotification(`✅ ${response.data.message}`);
+  
+      // Remove the notification after 3 seconds
+      setTimeout(() => setNotification(""), 3000);
+  
+      // Update state to remove the model from deployed models
+      setModels(models.map(model =>
+        model.name === modelName && model.version === modelVersion
+          ? { ...model, status: "Pending" } // Change status to "Pending" instead of removing
+          : model
+      ));
+      
+    } catch (error) {
+      // Show error notification
+      setNotification("❌ Failed to undeploy model.");
+      setTimeout(() => setNotification(""), 3000);
+    }
+  };
+  
+
   const goBack = () => navigate(-1);
   const navToHomePage = () => navigate('/home');
   const navToInferencePage = (modelName) => navigate(`/inference?model=${modelName}`);
@@ -23,10 +71,14 @@ const ModelOverview = () => {
     <div style={styles.container}>
       <div style={styles.backButtonContainer}>
         <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"></link>
         <i className="material-icons" style={styles.homeIcon} onClick={navToHomePage}>home</i>
         <button onClick={goBack} style={styles.backButton}>← Back</button>
       </div>
       <h1 style={styles.title}>Model Overview</h1>
+
+      {notification && (notification.includes("Failed") ? <div style={styles.notificationFailed}>{notification}</div> : <div style={styles.notification}>{notification}</div>)}
+
 
       {models.length === 0  ? (
         <p style={styles.noModels}>No models uploaded yet.</p>
@@ -34,11 +86,29 @@ const ModelOverview = () => {
         <div style={styles.modelGrid}>
           {models.map((model, index) => (
             <div key={index} style={styles.modelCard} className="model-card">
-              <h3 style={styles.modelName}>{model.name}</h3>
+              <h3 style={styles.modelName}>{model.name} - v{model.version}</h3>
               <p>📅 Uploaded: {model.upload || "Unknown"}</p>
               <p>📦 Size: {model.size || "N/A"}</p>
-              {model.status === "Deployed" ? (<div><p>⚡ Status: Deployed</p> <button style={styles.button} onClick={() => setSelectedModel(model)}>View Details</button> </div>):
-              ( <div><p>⚡ Status: Pending</p> <button style={styles.button} onClick={() => navigate(`/deploy?model=${model.name}`)}>Deploy</button> </div>) }
+              <div>
+                <p style={styles.statusText}>⚡ Status: {model.status === "Deployed" ? "Deployed" : "Pending"}</p>
+
+                <div style={styles.buttonContainer}>
+                  {model.status === "Deployed" ? (
+                    <div style={styles.buttonDiv}>
+                    <button style={styles.button} onClick={() => setSelectedModel(model)}>Details</button>
+                    <button style={styles.button} onClick={() => undeployModel(model.name, model.version)}>Undeploy</button>
+                    </div>
+                  ) : (
+                    <div>
+                    <button style={styles.button} onClick={() => navigate(`/deploy?model=${model.name}`)}>Deploy</button>
+                    <button style={styles.deleteButton} onClick={() => deleteModel(model.name, model.version)}>
+                    <i className="fa fa-trash-o"></i>
+                    </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
           ))} 
         </div>
@@ -51,10 +121,10 @@ const ModelOverview = () => {
             <h2>Model Details</h2>
             <p><strong>Name:</strong> {selectedModel.name}</p>
             <p><strong>ID:</strong> {selectedModel._id}</p>
-            <p><strong>Version:</strong> 1.0</p>
+            <p><strong>Version:</strong> {selectedModel.version}</p>
             <p><strong>Deployed:</strong> {selectedModel.deploy}</p>
             <p><strong>REST API Endpoint:</strong></p>
-            <p style={styles.apiBox}>http://127.0.0.1:8000/inference/infer/{selectedModel.name}</p>
+            <p style={styles.apiBox}>{selectedModel.endpoint}</p>
             <button style={styles.inferenceButton} onClick={() => navToInferencePage(selectedModel.name)}>Go to Inference</button>
             <button style={styles.closeButton} onClick={() => setSelectedModel(null)}>Close</button>
           </div>
@@ -99,10 +169,14 @@ const styles = {
   modelName: {
     fontSize: "20px",
     marginBottom: "10px",
+    overflow: "auto",
     color: "#f9a825",
   },
   button: {
+    flex: "1",
     marginTop: "10px",
+    minWidth: "120px", 
+    whiteSpace: "nowrap", 
     padding: "10px",
     border: "none",
     backgroundColor: "#2575fc",
@@ -195,5 +269,46 @@ const styles = {
   },
   testButton: {
     float: "right"
+  },
+  deleteButton: {
+    background: "red",
+    padding: "10px 10px",
+    marginLeft: "5px"
+  },
+  notification: {
+    position: "fixed",
+    top: "10px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "#4CAF50",
+    color: "#fff",
+    padding: "10px 20px",
+    borderRadius: "8px",
+    boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.2)",
+    zIndex: 1000,
+    fontSize: "16px",
+    fontWeight: "bold",
+    transition: "opacity 0.3s ease",
+  },
+  notificationFailed: {
+    position: "fixed",
+    top: "10px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    backgroundColor: "red",
+    color: "#fff",
+    padding: "10px 20px",
+    borderRadius: "8px",
+    boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.2)",
+    zIndex: 1000,
+    fontSize: "16px",
+    fontWeight: "bold",
+    transition: "opacity 0.3s ease",
+  },
+  buttonDiv: {
+    display: "flex",        
+    gap: "10px",           
+    justifyContent: "center", 
+    alignItems: "center",  
   }
 };

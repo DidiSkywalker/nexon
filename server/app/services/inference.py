@@ -25,7 +25,17 @@ async def infer(request: InferenceRequest, model_name):
     """
     Runs inference on the uploaded ONNX model with the given inputs.
     """
-    grid_out = await fs.open_download_stream_by_name(model_name)
+    models = await models_collection.find({"name": model_name}).to_list(None)
+    if not models:
+        raise HTTPException(status_code=400, detail="No model with this name has been uploaded")
+    file_id = None
+    for model in models:
+        if model["status"] == "Deployed":
+            file_id = model["file_id"]
+            break
+    if file_id == None:
+        raise HTTPException(status_code=400, detail="No model with this name has been deployed")
+    grid_out = await fs.open_download_stream(file_id=ObjectId(file_id))
     model_bytes = await grid_out.read()
     session = ort.InferenceSession(model_bytes)
 
@@ -37,6 +47,7 @@ async def infer(request: InferenceRequest, model_name):
         input_data = request.input
         input_name = session.get_inputs()[0].name
         output_name = session.get_outputs()[0].name
+
 
        #Currently poses some problems because the shape format isn't always the same and mismatching shapes do not necessarily lead to an error
        # Check input shape compatibility

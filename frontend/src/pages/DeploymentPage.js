@@ -92,7 +92,7 @@ const Deploy = () => {
         <select value={selectedModel} onChange={handleModelChange} style={styles.dropdown}>
           <option value="">-- Select a Model --</option>
           {models.map((model) => (
-            <option key={model.id} value={model.name}>{model.name}</option>
+            <option key={model.id} value={model.name}>{model.name}-v{model.version}</option>
           ))}
         </select>
 

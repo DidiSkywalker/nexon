@@ -29,6 +29,12 @@ async def upload_file(file: UploadFile = File(...)):
     
     try:
     
+     latest_model = await models_collection.find_one(
+        {"name": file.filename}, sort=[("version", -1)]
+     )
+
+     new_version = 1 if latest_model is None else latest_model["version"] + 1
+
      file_id = await fs.upload_from_stream(file.filename, file.file)
      size = convert_size(file.size)
      upload_date = f"{datetime.now().day}/{datetime.now().month}/{datetime.now().year}"
@@ -37,12 +43,14 @@ async def upload_file(file: UploadFile = File(...)):
         "file_id": str(file_id),
         "name": file.filename,
         "upload": upload_date,
+        "version": new_version,
         "deploy": "",
         "size": size,
         "status": "Uploaded",
      }
 
      result = await models_collection.insert_one(model_metadata)
+
 
      return {
         "message": f"Model {file.filename} uploaded successfully!",

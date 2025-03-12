@@ -1,23 +1,23 @@
 import onnxruntime as ort
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from pydantic import BaseModel
 from datetime import datetime
 from .database import fs, models_collection
 from bson import ObjectId
 import math
+import psutil
 
 app = FastAPI()
 
-# Global variables to store session and model information
-session = None
-model_name = None
-input_name = None
-output_name = None
 
 
 class DeployRequest(BaseModel):
     model_name: str
     model_id: str
+
+class UndeployRequest(BaseModel):
+    model_name: str
+    model_version: int
 
 
 class InferenceRequest(BaseModel):
@@ -34,17 +34,28 @@ def convert_size(size_bytes):
 
 
 @app.post("/deploy-file/")
-async def deploy_file(file: UploadFile = File(...)):
+async def deploy_file(request: Request, file: UploadFile = File(...)):
     """
     Uploads an ONNX model file and initializes an inference session.
     """
-    global session, model_name, input_name, output_name
-
+    cpu_before = psutil.cpu_percent()
+    mem_before = psutil.virtual_memory().percent
     if not file.filename.endswith(".onnx"):
         raise HTTPException(status_code=400, detail="Only ONNX files are allowed.")
+    
+    models = await models_collection.find({"name": file.filename}).to_list(None)
+    for model in models:
+       if (model["status"] == "Deployed"):
+        raise HTTPException(status_code=400, detail="Another version of this model is already deployed!")
 
     try:
         file_id = await fs.upload_from_stream(file.filename, file.file)
+
+        latest_model = await models_collection.find_one(
+        {"name": file.filename}, sort=[("version", -1)]
+        )
+
+        new_version = 1 if latest_model is None else latest_model["version"] + 1
 
         size = convert_size(file.size)
         date = f"{datetime.now().day}/{datetime.now().month}/{datetime.now().year}"
@@ -53,78 +64,86 @@ async def deploy_file(file: UploadFile = File(...)):
         "file_id": str(file_id),
         "name": file.filename,
         "upload": date,
+        "version": new_version,
         "deploy": date,
         "size": size,
         "status": "Deployed",
+        "endpoint": f"{request.base_url}/inference/infer/{file.filename}"
         }
 
         result = await models_collection.insert_one(model_metadata)
+        cpu_after = psutil.cpu_percent()
+        mem_after = psutil.virtual_memory().percent
+
+        print(f"CPU Usage: {cpu_before}% -> {cpu_after}%")
+        print(f"Memory Usage: {mem_before}% -> {mem_after}%")
 
         return {
           "message": f"Model {file.filename} uploaded successfuly!",
-          "model_id": str(result.inserted_id),
-          "file_id": str(file_id),
-          "model_name": model_name,
           "inference_endpoint": f"http://127.0.0.1:8000/inference/infer/{file.filename}"
         }
-        # # Save the uploaded model to disk
-        # model_path = f"app/deployedModels/{file.filename}"
-        # with open(model_path, "wb") as f:
-        #     f.write(await file.read())
-
-        # # Initialize ONNX session
-        # session = ort.InferenceSession(model_path)
-        # model_name = file.filename
-        # input_name = session.get_inputs()[0].name
-        # output_name = session.get_outputs()[0].name
-
-        # return {
-        #     "message": f"Model '{os.path.splitext(file.filename)[0]}' uploaded and deployed successfully.",
-        #     "model_name": model_name,
-        #     "inference_endpoint": f"http://127.0.0.1:8000/inference/infer/{model_name}"
-        # }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deploying model: {str(e)}")
 
 
 @app.post("/deploy-model/")
-async def deploy_model(request: DeployRequest):
+async def deploy_model(request: DeployRequest, base_url_request: Request):
     """
-    Deploys an already uploaded model by loading it into an ONNX session.
+    Deploys an already uploaded model
     """
-    global session, model_name, input_name, output_name
-
     try:
+        models = await models_collection.find({"name": request.model_name}).to_list(None)   
+        for model in models:
+          if (model["status"] == "Deployed"):
+           if model["_id"] == ObjectId(request.model_id):
+              raise HTTPException(status_code=400, detail="This version is already deployed!")
+           else:
+            raise HTTPException(status_code=400, detail="Another version of this model is already deployed!")
 
         date = f"{datetime.now().day}/{datetime.now().month}/{datetime.now().year}"
 
-        updated_result = models_collection.update_one(
+        api_endpoint = f"{base_url_request.base_url}/inference/infer/{request.model_name}"
+
+        updated_result = await models_collection.update_one(
             {"_id": ObjectId(request.model_id)},
-            {"$set": {"status": "Deployed", "deploy": date}},
+            {"$set": {"status": "Deployed", "deploy": date, "endpoint": api_endpoint}},
         )
-
-        return {
+        if updated_result.modified_count > 0:
+         return {
           "message": f"Model {request.model_name} deployed successfuly!",
-          "inference_endpoint": f"http://127.0.0.1:8000/inference/infer/{request.model_name}"
-        }
-    # try:
-    #     # Initialize ONNX session
-    #     session = ort.InferenceSession(model_path)
-    #     model_name = request.model_name
-    #     input_name = session.get_inputs()[0].name
-    #     output_name = session.get_outputs()[0].name
-
-    #     os.makedirs("app/deployedModels", exist_ok=True)
-
-    #     # Move the model to deployedModels directory
-    #     shutil.move(model_path, "app/deployedModels")
-
-    #     return {
-    #         "message": f"Model {model_name} deployed successfully.",
-    #         "model_name": model_name,
-    #         "inference_endpoint": f"http://127.0.0.1:8000/inference/infer/{model_name}"
-    #     }
+          "inference_endpoint": api_endpoint
+         }
+        else:
+           raise HTTPException(status_code=400, detail="Model does not exist")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deploying model: {str(e)}")
+    
+
+@app.put("/undeploy/{model_name}")
+async def undeploy_model(request: UndeployRequest):
+    """
+    Undeploys a model by updating its status in the database.
+    """
+    # Find the specific model by name and version
+    model = await models_collection.find_one({"name": request.model_name, "version": request.model_version})
+
+    if(model["status"] != "Deployed") :
+       raise HTTPException(status_code=400, detail="Model is not deployed")
+    
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    # Update model status to 'Pending'
+    update_result = await models_collection.update_one(
+        {"_id": model["_id"]}, 
+        {"$set": {"status": "Uploaded"}}
+    )
+
+    if update_result.modified_count == 0:
+        raise HTTPException(status_code=500, detail="Failed to undeploy model.")
+
+    return {"message": f"Model '{request.model_name}' (v{request.model_version}) undeployed successfully."}
+

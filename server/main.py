@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.inference import app as inference_app
 from app.services.deployment import app as deployment_app
 from app.services.upload import app as upload_app
 from app.services.database import fs, models_collection
+from bson import ObjectId
+from pydantic import BaseModel
 
 # Create the main FastAPI app
 app = FastAPI()
@@ -54,12 +56,36 @@ async def getAllModels():
         model["file_id"] = str(model["file_id"])
         
     return models
-    
 
 
-# main driver function
-if __name__ == '__main__':
+@app.delete("/deleteModel/{model_name}/{model_version}")
+async def delete_model(model_name: str, model_version: int):
+    """
+    Deletes a model by name from the database and GridFS storage.
+    """
+    model = await models_collection.find_one({"name": model_name, "version": model_version})
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found.")
 
-    # run() method of Flask class runs the application 
-    # on the local development server.
-    app.run()
+    # Ensure the file_id exists
+    file_id = model.get("file_id")
+    if not file_id:
+        raise HTTPException(status_code=400, detail="Model does not have a valid file ID.")
+
+    try:
+        # Delete the file from GridFS
+        await fs.delete(ObjectId(file_id))  # Ensure we pass an ObjectId
+
+        # Delete model metadata
+        delete_result = await models_collection.delete_one({"_id": model["_id"]})
+
+        if delete_result.deleted_count == 1:
+            return {"message": f"Model '{model_name}' deleted successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete model.")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting model: {str(e)}")
+
+
+
