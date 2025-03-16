@@ -35,7 +35,7 @@ const Home = () => {
       <header style={styles.header}>
         <div style={styles.logo}>NEXON</div>
         <nav style={styles.nav}>
-          {["Upload", "Deploy", "Inference", "Metadata Management", "Model Overview"].map((item, index) => (
+          {["Upload", "Deploy", "Inference", "Model Overview"].map((item, index) => (
             <span
               key={index}
               onClick={
@@ -56,10 +56,6 @@ const Home = () => {
             </span>
           ))}
         </nav>
-        <div style={styles.profileContainer}>
-          <i className="material-icons" style={styles.profile}>person</i>
-          <span style={styles.welcomeText}>Welcome, User</span>
-        </div>
       </header>
 
       {/* Hero Section */}
@@ -95,24 +91,15 @@ const styles = {
     backgroundColor: "#1f1f2e",
   },
   logo: {
-    fontSize: "28px",
+    fontSize: "35px",
     fontWeight: "bold",
     color: "#fff",
+    flex: 1,
   },
   nav: {
     display: "flex",
-    gap: "20px",
-  },
-  profileContainer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  },
-  profile: {
-    fontSize: "40px",
-    color: "#fff",
-    cursor: "pointer",
-    transition: "color 0.3s ease",
+    gap: "30px",
+    flex: "2",
   },
   welcomeText: {
     marginTop: "5px",
@@ -159,8 +146,11 @@ const styles = {
     transition: "background-color 0.3s ease",
   },
   menuButton: {
+    position: "relative",
     cursor: "pointer",
     transition: "font-weight 0.2s ease",
+    fontSize: "20px"
+
   },
 };
 
