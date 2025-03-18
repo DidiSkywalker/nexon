@@ -49,9 +49,10 @@ async def infer(request: InferenceRequest, model_name):
         output_name = session.get_outputs()[0].name
 
 
-       #Currently poses some problems because the shape format isn't always the same and mismatching shapes do not necessarily lead to an error
-       # Check input shape compatibility
-        expected_shape = session.get_inputs()[0].shape
+        # Currently poses some problems because the shape format isn't always the same and mismatching shapes do not necessarily lead to an error
+
+        # Check input shape compatibility
+        # expected_shape = session.get_inputs()[0].shape
         # if list(input_data.shape) != expected_shape:
         #     raise HTTPException(
         #         status_code=400,

@@ -26,7 +26,6 @@ const Home = () => {
     navigate('/overview');
   };
 
-
   return (
     <div style={styles.container}>
       <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"></link>
@@ -84,22 +83,23 @@ const styles = {
     height: "100vh",
   },
   header: {
+    position: "relative", // Required for absolute positioning of the nav
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
     padding: "20px 50px",
     backgroundColor: "#1f1f2e",
   },
   logo: {
-    fontSize: "35px",
+    fontSize: "32px",
     fontWeight: "bold",
     color: "#fff",
-    flex: 1,
   },
   nav: {
+    position: "absolute", // Position the nav absolutely
+    left: "50%", // Move the nav to the horizontal center
+    transform: "translateX(-50%)", // Adjust for the nav's own width
     display: "flex",
-    gap: "30px",
-    flex: "2",
+    gap: "20px",
   },
   welcomeText: {
     marginTop: "5px",
@@ -149,8 +149,7 @@ const styles = {
     position: "relative",
     cursor: "pointer",
     transition: "font-weight 0.2s ease",
-    fontSize: "20px"
-
+    fontSize: "22px"
   },
 };
 
