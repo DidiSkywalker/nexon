@@ -17,6 +17,9 @@ const Upload = () => {
   const navToHomePage = () => {
     navigate('/home');
   };
+  const navToModelOverview = () => {
+    navigate('/overview');
+  };
   const goBack = () => {
     navigate(-1); // Go to the previous page
   };
@@ -66,8 +69,8 @@ const Upload = () => {
             <button style={styles.navButton} onClick={navToDeploymentPage}>
               Deploy the model
             </button>
-            <button style={styles.navButton} onClick={navToHomePage}>
-              Go back to Home Page
+            <button style={styles.navButton} onClick={navToModelOverview}>
+              Go to Model Overview
             </button>
           </div>
         )}
