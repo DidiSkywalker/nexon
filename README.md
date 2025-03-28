@@ -7,6 +7,7 @@ The **ONNX Deployment Platform** NEXON is a web-based application that allows us
 - Upload and deploy ONNX models.
 - Perform inference with custom input data.
 - View inference results in a results panel.
+- View all models uploaded on the platform and their metadata.
 - Modern, responsive UI with an intuitive layout.
 
 ---
@@ -64,7 +65,4 @@ cd frontend
 npm install
 npm start
 ```
-## 🛠 Usage
-## API Endpoints
-## Troubleshooting
 
