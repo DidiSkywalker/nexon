@@ -37,7 +37,10 @@ async def infer(request: InferenceRequest, model_name):
         raise HTTPException(status_code=400, detail="No model with this name has been deployed")
     grid_out = await fs.open_download_stream(file_id=ObjectId(file_id))
     model_bytes = await grid_out.read()
-    session = ort.InferenceSession(model_bytes)
+    try :
+     session = ort.InferenceSession(model_bytes)
+    except Exception as e: 
+        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}. This could be due to a damaged file. Please try uploading the model again.")
 
     try:
         # Convert input data to NumPy array
