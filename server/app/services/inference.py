@@ -25,22 +25,23 @@ async def infer(request: InferenceRequest, model_name):
     """
     Runs inference on the uploaded ONNX model with the given inputs.
     """
-    models = await models_collection.find({"name": model_name}).to_list(None)
-    if not models:
+    #first try catch is for server errors. Second one is for client errors, e.g wrong input
+    try :
+     models = await models_collection.find({"name": model_name}).to_list(None)
+     if not models:
         raise HTTPException(status_code=400, detail="No model with this name has been uploaded")
-    file_id = None
-    for model in models:
+     file_id = None
+     for model in models:
         if model["status"] == "Deployed":
             file_id = model["file_id"]
             break
-    if file_id == None:
+     if file_id == None:
         raise HTTPException(status_code=400, detail="No model with this name has been deployed")
-    grid_out = await fs.open_download_stream(file_id=ObjectId(file_id))
-    model_bytes = await grid_out.read()
-    try :
+     grid_out = await fs.open_download_stream(file_id=ObjectId(file_id))
+     model_bytes = await grid_out.read()
      session = ort.InferenceSession(model_bytes)
     except Exception as e: 
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}. This could be due to a damaged file. Please try uploading the model again.")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}. This could be due to a corrupted file or a database disconnection. Please try uploading the model again or try again later.")
 
     try:
         # Convert input data to NumPy array
@@ -69,4 +70,4 @@ async def infer(request: InferenceRequest, model_name):
         return {"results": json_results}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Inference error: {str(e)}")
