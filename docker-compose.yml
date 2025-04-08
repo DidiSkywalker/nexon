@@ -1,0 +1,36 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: didiskywalker/nexon-frontend
+    container_name: nexon_frontend
+    ports: 
+      - 3000:80
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: didiskywalker/nexon-backend
+    container_name: nexon_backend
+    ports:
+      - 8000:80
+    environment:
+      - NEXON_MONGO_HOST=${NEXON_MONGO_HOST}
+      - NEXON_MONGO_PORT=${NEXON_MONGO_PORT}
+      - NEXON_MONGO_USER=${NEXON_MONGO_USER}
+      - NEXON_MONGO_PASS=${NEXON_MONGO_PASS}
+      - NEXON_MONGO_DB=${NEXON_MONGO_DB}
+    depends_on:
+      - db
+
+  db:
+    image: mongo:latest
+    container_name: nexon_db
+    ports:
+      - 27017:27017
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${NEXON_MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${NEXON_MONGO_PASS}
+      - MONGO_INITDB_DATABASE=${NEXON_MONGO_DB}

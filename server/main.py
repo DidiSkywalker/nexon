@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.inference import app as inference_app
@@ -6,6 +7,9 @@ from app.services.upload import app as upload_app
 from app.services.database import fs, models_collection
 from bson import ObjectId
 from pydantic import BaseModel
+
+# Load environment variables from .env
+load_dotenv()
 
 # Create the main FastAPI app
 app = FastAPI()
