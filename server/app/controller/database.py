@@ -1,5 +1,4 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from gridfs import GridFS
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from os import environ
 
