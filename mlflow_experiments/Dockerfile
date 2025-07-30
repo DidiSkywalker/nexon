@@ -1,6 +1,14 @@
-FROM continuumio/miniconda3:latest
+# FROM continuumio/miniconda3:latest
 
-RUN pip install mlflow boto3 scikit-learn
+# RUN pip install mlflow boto3 scikit-learn onnxruntime skl2onnx
+
+# WORKDIR /app
+# COPY . .
+
+FROM python:3.13.5-slim-bookworm
 
 WORKDIR /app
-COPY . .
+
+# Install dependencies for model generation and MLflow client
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt

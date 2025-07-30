@@ -3,16 +3,52 @@ from random import random, randint
 
 import mlflow
 import mlflow.sklearn
+import mlflow.onnx
 
-from sklearn.datasets import make_regression
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.datasets import make_regression, load_iris
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
+
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 
 
 MLFLOW_URI="http://mlflow:5000"
 mlflow.set_tracking_uri(MLFLOW_URI)
 print(f"MLflow is using tracking server at ${mlflow.get_tracking_uri()}")
+
+def experiment_onnx_model():
+  mlflow.set_experiment("ONNX_Model_Experiment")
+
+  with mlflow.start_run():
+      # Load and split data
+      iris = load_iris()
+      X_train, X_test, y_train, y_test = train_test_split(
+          iris.data, iris.target, test_size=0.2, random_state=42)
+
+      # Train a model
+      clf = RandomForestClassifier(n_estimators=10)
+      clf.fit(X_train, y_train)
+
+      # Convert to ONNX
+      initial_type = [("input", FloatTensorType([None, X_train.shape[1]]))]
+      onnx_model = convert_sklearn(clf, initial_types=initial_type)
+
+      # Save ONNX model to disk
+      onnx_model_path = "model.onnx"
+      with open(onnx_model_path, "wb") as f:
+          f.write(onnx_model.SerializeToString())
+
+      # Log ONNX model to MLflow
+      mlflow.onnx.log_model(
+          onnx_model=onnx_model,
+          artifact_path="onnx_model",
+          registered_model_name="IrisClassifierONNX"  # Register model!
+      )
+
+      # Log parameters/metrics if needed
+      mlflow.log_param("n_estimators", clf.n_estimators)
 
 def experiment_model():
     with mlflow.start_run() as run:
@@ -62,3 +98,5 @@ if __name__ == "__main__":
     experiment_artifact()
     print("Run experiment to log model...")
     experiment_model()
+    print("Run experiment to log ONNX model...")
+    experiment_onnx_model()

@@ -1,4 +1,4 @@
-from app.controller.database import DatabaseController
+from app.controller.database import DatabaseController, ModelMetadata
 from app.util.constants import STATUS_DEPLOYED, STATUS_UPLOADED
 from app.util.errors import BadRequestError, NotFoundError
 from bson import ObjectId
@@ -31,7 +31,9 @@ class ModelController:
       """
       Deletes a model by name from the database and GridFS storage.
       """
-      model = await self.db_controller.find_one({"name": model_name, "version": model_version})
+      print(f"Deleting model: {model_name}, version: {model_version}")
+      model = await self.db_controller.find_one({"name": model_name, "version": int(model_version)})
+      print(f"Model found: {model}")
       if not model:
           raise NotFoundError("Model not found.")
 
@@ -54,3 +56,20 @@ class ModelController:
 
       except Exception as e:
           raise Exception(f"Error deleting model: {str(e)}")
+        
+    async def register_model(self, model: ModelMetadata):
+        """
+        Registers a model in the database.
+        """
+        if not model.name:
+            raise BadRequestError("Model name and file ID are required.")
+
+        # Check if the model already exists
+        existing_model = await self.db_controller.find_one({"name": model.name, "version": model.version})
+        print(f"Checking for existing model: {existing_model}")
+        if existing_model:
+            raise BadRequestError(f"Model {model.name} version {model.version} already exists.")
+
+        # Insert the new model metadata
+        new_id = await self.db_controller.insert_model(model)
+        return {"message": f"Model {model.name} registered successfully!", "model_id": str(new_id)}
