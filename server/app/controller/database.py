@@ -1,5 +1,5 @@
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from os import environ
 
@@ -33,7 +33,7 @@ class DatabaseController():
     """
     Database controller for managing model metadata.
     """
-    def __init__(self, client: AsyncIOMotorClient, database, fs_bucket: AsyncIOMotorGridFSBucket):
+    def __init__(self, client: AsyncIOMotorClient, database: AsyncIOMotorDatabase, fs_bucket: AsyncIOMotorGridFSBucket):
       self.db_client = client
       self.database = database
       self.models_collection = self.database["models"]

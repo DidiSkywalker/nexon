@@ -14,7 +14,7 @@ services:
       MLFLOW_REGISTRY_STORE_URI: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysqldb:3306/${MYSQL_DATABASE}
       MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://${AWS_BUCKET_NAME}/
       MLFLOW_ARTIFACTS_DESTINATION: s3://${AWS_BUCKET_NAME}/
-      _MLFLOW_SERVER_ARTIFACT_DESTINATION: s3://${AWS_BUCKET_NAME}/
+      MLFLOW_SERVER_ARTIFACT_DESTINATION: s3://${AWS_BUCKET_NAME}/
       AWS_ENDPOINT_URL: http://s3:9000
     # volumes:
     #   - mlflow_data:/artifacts # Mount a named volume for persistent data
@@ -37,9 +37,9 @@ services:
       - mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysqldb:3306/${MYSQL_DATABASE}
       - --registry-store-uri
       - mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysqldb:3306/${MYSQL_DATABASE}
-      - --serve-artifacts
-      #- --default-artifact-root
-      #- s3://${AWS_BUCKET_NAME}/
+      #- --serve-artifacts
+      - --default-artifact-root
+      - s3://${AWS_BUCKET_NAME}/
       - --artifacts-destination
       - s3://${AWS_BUCKET_NAME}/
     networks:
@@ -67,7 +67,7 @@ services:
       - mlflow
 
   s3:
-    image: minio/minio:RELEASE.2023-11-01T18-37-25Z
+    image: minio/minio
     container_name: mlflow_s3
     restart: unless-stopped
     ports:
@@ -81,7 +81,7 @@ services:
       - internal
       - mlflow
     volumes:
-      - mlflow_s3:/data
+      - ./mlflow_data/s3:/data
 
   create_s3_buckets:
     image: minio/mc

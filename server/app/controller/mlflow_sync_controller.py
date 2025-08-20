@@ -1,4 +1,5 @@
 from datetime import datetime
+from bson import ObjectId
 from fastapi import BackgroundTasks
 import mlflow
 import os
@@ -12,6 +13,13 @@ from app.util.constants import STATUS_DEPLOYED, STATUS_DOWNLOADING
 from app.controller.model_controller import ModelController
 
 BASE_URL = "http://localhost:3000"
+
+class MLFlowModelInfos():
+    def __init__(self, model_name: str, model_version: str, model_uri: str):
+        self.model_name = model_name
+        self.model_version = model_version
+        self.model_uri = model_uri
+        self.model_id = model_uri.split("/")[-1]  # Extract model ID from URI
 
 class SyncModelsRequest(BaseModel):
     models: dict    
@@ -55,6 +63,13 @@ class MLFlowSyncController:
         registered_model = self.mlflow_client.get_registered_model(model_name)
         latest_versions = registered_model.latest_versions
         latest_version = latest_versions[0]
+        
+        
+        print(f"Registered Model: {registered_model}")
+        
+        print(f"v1: {latest_versions[0].source} - {latest_versions[0].description} [{latest_versions[0].run_id}]")
+        # print(f"v2: {latest_versions[1].source} - {latest_versions[1].description} [{latest_versions[1].run_id}]")
+
         print(f"{latest_version}")
         now = datetime.now()
         upload_date = f"{now.day}/{now.month}/{now.year}"
@@ -67,30 +82,33 @@ class MLFlowSyncController:
         print(f"Model metadata: {model_metadata}")
         register_response = await ModelController(db_controller).register_model(model_metadata)
         print(f"Model registered: {register_response}")
-        model_id = register_response["model_id"]
-        print(f"Starting background task to deploy model: {model_name}, {latest_version.run_id}, {model_id}")
-        background_tasks.add_task(self.background_task_deploy_model, model_name, latest_version.run_id, model_id, db_controller=db_controller)
+        nexon_model_id = register_response["model_id"]
+        mlflow_model_infos = MLFlowModelInfos(model_name, latest_version.version, latest_version.source)
+        print(f"Starting background task to deploy model: {model_name}, {latest_version.run_id}, {mlflow_model_infos}")
+        background_tasks.add_task(self.background_task_deploy_model, nexon_model_id, mlflow_model_infos, latest_version.run_id, db_controller=db_controller)
         return f"Latest version for {model_name}: {latest_version.version}"
       except Exception as e:
         return f"No versions found: {e}"
         
-    async def background_task_deploy_model(self, model_name: str, run_id: str, model_id: str, db_controller: DatabaseController):
+    async def background_task_deploy_model(self, nexon_model_id: str, model_infos: MLFlowModelInfos, run_id: str, db_controller: DatabaseController):
       """
       Background task to deploy a model.
       This is a placeholder for the actual deployment logic.
       """
       try:
+        model_id, model_name, model_version = model_infos.model_id, model_infos.model_name, model_infos.model_version
         print(f"Deploying model {model_name} in the background...")
-        aws_secret = environ['AWS_SECRET_ACCESS_KEY']
-        aws_key = environ['AWS_ACCESS_KEY_ID']
-        print(f"Using AWS credentials: {aws_key}, {aws_secret}")
+        # aws_secret = environ['AWS_SECRET_ACCESS_KEY']
+        # aws_key = environ['AWS_ACCESS_KEY_ID']
+        # print(f"Using AWS credentials: {aws_key}, {aws_secret}")
         
         print(f"Fetching Run ID: {run_id}")
         run = self.mlflow_client.get_run(run_id)
         print(f"Run details: {run}")
         
-        print(f"Listing artifacts for logged model...")
-        artifacts = self.mlflow_client.list_logged_model_artifacts("m-2bed4d15d0bd450ba3360a5926e6d1c4")
+        
+        print(f"Listing artifacts for logged model... {model_id}")
+        artifacts = self.mlflow_client.list_logged_model_artifacts(model_id)
         print(f"Artifacts for logged model:")
         for artifact in artifacts:
             print(f"- Path: {artifact.path}, Is Directory: {artifact.is_dir}, File Size: {artifact.file_size}") 
@@ -108,29 +126,36 @@ class MLFlowSyncController:
         # Here you would implement the actual deployment 
         with tempfile.TemporaryDirectory() as tmpdir:
           print(f"Temporary directory created: {tmpdir}")
-          artifacts = self.mlflow_client.list_artifacts(run_id=run_id)
-          print(f"Artifacts for run {run_id}:")
-          for artifact in artifacts:
-              print(f"- Path: {artifact.path}, Is Directory: {artifact.is_dir}, File Size: {artifact.file_size}")
-          file_path = tmpdir + "/model.onnx"
-          print(f"File path: {file_path}")
+          # artifacts = self.mlflow_client.list_artifacts(run_id=run_id)
+          # print(f"Artifacts for run {run_id}:")
+          # for artifact in artifacts:
+          #     print(f"- Path: {artifact.path}, Is Directory: {artifact.is_dir}, File Size: {artifact.file_size}")
           
-          download_result = self.mlflow_client.download_artifacts(
-              run_id=run_id,
-              path="model.onnx",
-              dst_path=file_path
+          print(f"Temp dir: {tmpdir}")
+          
+          artifact_uri = f"models:/{model_name}/{model_version}/model.onnx"
+          print(f"Downloading model artifact from URI: {artifact_uri}")
+          download_result = mlflow.artifacts.download_artifacts(
+              artifact_uri=artifact_uri,
+              dst_path=tmpdir
           )
           print(f"Model downloaded to temporary directory '{tmpdir}': {download_result}")
-          print(f"Uploading file path: {file_path}")
-          file_id = await db_controller.upload_file("model.onnx", file_path)
-          now = datetime.now()
-          deploy_date = f"{now.day}/{now.month}/{now.year}"
-          api_endpoint = f"{BASE_URL}/inference/infer/{model_name}"
-          updated_result = await self.db_controller.update_one(
-            {"_id": model_id},
-            {"$set": {"status": STATUS_DEPLOYED, "deploy": deploy_date, "file_id": str(file_id), "endpoint": api_endpoint}},
-          )
-          print(f"Model metadata updated in database: {updated_result}")
+          local_file_path = tmpdir + "/model.onnx"
+          print(f"Uploading file path: {local_file_path}")
+          with open(local_file_path, "rb") as file_stream:
+            print(f"File opened successfully: {file_stream}")
+            # Upload the model file to the database
+            print(f"Uploading model file to database...")
+            file_id = await db_controller.upload_file("model.onnx", file_stream)
+            now = datetime.now()
+            deploy_date = f"{now.day}/{now.month}/{now.year}"
+            api_endpoint = f"{BASE_URL}/inference/infer/{model_name}"
+            print(f"Nexon Model ID: {nexon_model_id}, File ID: {file_id}, Deploy Date: {deploy_date}, API Endpoint: {api_endpoint}")
+            updated_result = await db_controller.update_one(
+              {"_id": ObjectId(nexon_model_id)},
+              {"$set": {"status": STATUS_DEPLOYED, "deploy": deploy_date, "file_id": str(file_id), "endpoint": api_endpoint}},
+            )
+            print(f"Model metadata updated in database: {updated_result}")
         # For example, you might call a deployment service or update a database
         print(f"Model deployed successfully.")
       except Exception as e:
