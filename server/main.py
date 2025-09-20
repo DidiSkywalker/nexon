@@ -8,6 +8,7 @@ from app.api.upload import app as upload_app
 from app.api.models import app as model_app
 from app.api.mlflow_api import app as mlflow_app
 from app.controller.database import close_mongo_connection, connect_to_mongo
+import os 
 
 # Load environment variables from .env
 load_dotenv()
@@ -22,6 +23,8 @@ async def lifespan(app: FastAPI):
 
 # Create the main FastAPI app
 app = FastAPI(lifespan=lifespan)
+
+print(f"Environment variable NEXON_MONGO_HOST: {os.getenv('NEXON_MONGO_HOST')}")
 
 # Mount the inference API to the main app (if modularized)
 app.mount("/inference", inference_app)

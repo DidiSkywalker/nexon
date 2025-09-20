@@ -1,8 +1,8 @@
-from fastapi import BackgroundTasks, Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, Response
 import numpy as np
 
 from app.controller.mlflow_controller import MLFlowController
-from app.controller.mlflow_sync_controller import MLFlowSyncController, SyncModelsRequest
+from app.controller.mlflow_sync_controller import MLFlowSyncController, SyncModelsRequest, SyncModelsResponse
 from app.controller.database import DatabaseController, get_db_controller
 
 app = FastAPI()
@@ -20,9 +20,9 @@ async def get_mlflow_test():
 
 
 @app.post("/sync")
-async def post_mlflow_sync(models: SyncModelsRequest):
+async def post_mlflow_sync(models: SyncModelsRequest, response: Response, background_tasks: BackgroundTasks, db_controller: DatabaseController = Depends(get_db_controller)):
   print(f"Received models for sync: {models}")
-  return await MLFlowSyncController().sync_models(models)
+  return await MLFlowSyncController().sync_models(models, api_response=response, background_tasks=background_tasks, db_controller=db_controller)
 
 @app.post("/deployone")
 async def post_mlflow_deploy_one(model_name: str, background_tasks: BackgroundTasks, db_controller: DatabaseController = Depends(get_db_controller)):

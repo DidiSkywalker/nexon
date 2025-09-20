@@ -19,7 +19,7 @@ from skl2onnx.common.data_types import FloatTensorType
 
 mlflow.set_experiment("ONNX Model Generation Experiment")
 
-def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 3)):
+def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 3), alias: str = None, tags: dict = None):
     """
     Trains a simple scikit-learn model, converts it to ONNX,
     logs it to MLflow, and registers it in the Model Registry.
@@ -55,16 +55,20 @@ def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 
         # 5. Log the ONNX model to MLflow
         model_info = mlflow.onnx.log_model(
             onnx_model=onnx_model,
+            
             name="onnx_model",  # Path within the run's artifact directory
             registered_model_name=model_name, # Name to register the model under in the Model Registry
             signature=mlflow.models.infer_signature(X, y), # Infer input/output schema
             input_example=X[:2], # Provide an example input for documentation
+            tags=tags,
         )
         print(f"ONNX model logged and registered as '{model_name}'.")
         print(f"Artifact path: {model_info.artifact_path}")
 
         # 6. Set a description for the registered model version
         client = mlflow.tracking.MlflowClient()
+        if alias:
+            client.set_registered_model_alias(model_name, alias, model_info.version)
         # Get the latest version of the registered model
         # Note: This might be tricky if two runs register at the same time.
         # For local testing, it's usually fine. In production, consider explicit versioning or waits.
@@ -87,19 +91,57 @@ if __name__ == "__main__":
     print("Starting ONNX model generation and registration script...")
     
     # Create and log first version of the model
-    run_id_v1 = create_and_log_onnx_model(
-        "MyLinearRegressionONNX",
-        "Initial version of a simple linear regression model converted to ONNX.",
-        input_shape=(100, 5)
-    )
-    print(f"\nModel 'MyLinearRegressionONNX' version logged from run {run_id_v1}.")
+    # run_id_v1 = create_and_log_onnx_model(
+    #     "MyLinearRegressionONNX",
+    #     "Initial version of a simple linear regression model converted to ONNX.",
+    #     input_shape=(100, 5)
+    # )
+    # print(f"\nModel 'MyLinearRegressionONNX' version logged from run {run_id_v1}.")
 
-    # Create and log a second version of the model (simulating a new training run)
-    run_id_v2 = create_and_log_onnx_model(
-        "MyLinearRegressionONNX",
-        "Second version with different input features.",
-        input_shape=(150, 7) # Change input shape to simulate a different model
+    # # Create and log a second version of the model (simulating a new training run)
+    # run_id_v2 = create_and_log_onnx_model(
+    #     "MyLinearRegressionONNX",
+    #     "Second version with different input features.",
+    #     input_shape=(150, 7) # Change input shape to simulate a different model
+    # )
+    # print(f"\nModel 'MyLinearRegressionONNX' version logged from run {run_id_v2}.")
+    
+    
+    run_id_v1 = create_and_log_onnx_model(
+        "model_a",
+        "model_a v1.",
+        input_shape=(100, 5),
+        tags={"project": "test", "type": "regression"}
     )
-    print(f"\nModel 'MyLinearRegressionONNX' version logged from run {run_id_v2}.")
+    print(f"\nModel 'model_a' version logged from run {run_id_v1}.")
+    
+    
+    run_id_v2 = create_and_log_onnx_model(
+        "model_a",
+        "model_a v2.",
+        input_shape=(100, 5),
+        tags={"project": "anothertest", "type": "regression"}
+    )
+    print(f"\nModel 'model_a' version logged from run {run_id_v2}.")
+
+
+    run_id_b_sta = create_and_log_onnx_model(
+        "model_b",
+        "Stable version of model_b.",
+        input_shape=(100, 5),
+        tags={"type": "regression"},
+        alias="stable"
+    )
+    print(f"\nModel 'model_b' version logged from run {run_id_b_sta}.")
+
+
+    run_id_b_ex = create_and_log_onnx_model(
+        "model_b",
+        "Experimental version of model_b.",
+        input_shape=(100, 5),
+        tags={"type": "regression"},
+        alias="experimental"
+    )
+    print(f"\nModel 'model_b' version logged from run {run_id_b_ex}.")
 
     print("\nScript finished. Check the MLflow UI at http://localhost:5000 to see your runs and registered models.")

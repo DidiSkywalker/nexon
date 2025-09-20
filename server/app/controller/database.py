@@ -1,9 +1,13 @@
+from dotenv import load_dotenv
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from os import environ
 
+load_dotenv()
+
 # Database connection
+# print(f"Environment: {environ}")
 MONGO_URI = f"mongodb://{environ['NEXON_MONGO_USER']}:{environ['NEXON_MONGO_PASS']}@{environ['NEXON_MONGO_HOST']}:{environ['NEXON_MONGO_PORT']}"
 DB_NAME = environ['NEXON_MONGO_DB']
       
