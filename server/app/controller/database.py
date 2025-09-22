@@ -3,6 +3,9 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from os import environ
+import logging
+
+logger = logging.getLogger("uvicorn")
 
 load_dotenv()
 
@@ -13,7 +16,7 @@ DB_NAME = environ['NEXON_MONGO_DB']
       
 
 class ModelMetadata():
-    def __init__(self, file_id: str = None, name: str = None, upload: str = None, version: int = None, deploy: str = None, size: str = None, status: str = None):
+    def __init__(self, file_id: str = None, name: str = None, upload: str = None, version: int = None, deploy: str = None, size: str = None, status: str = None, mlflow_uri: str = None, mlflow_source_selectors: list = []):
         self.file_id = file_id
         self.name = name
         self.upload = upload
@@ -21,6 +24,8 @@ class ModelMetadata():
         self.deploy = deploy
         self.size = size
         self.status = status
+        self.mlflow_uri = mlflow_uri
+        self.mlflow_source_selectors = mlflow_source_selectors
 
     def to_dict(self):
         return {
@@ -31,7 +36,14 @@ class ModelMetadata():
             "deploy": self.deploy,
             "size": self.size,
             "status": self.status,
+            "mlflow_uri": self.mlflow_uri,
+            "mlflow_source_selectors": self.mlflow_source_selectors
         }      
+        
+class MLflowDeployment():
+  def __init__(self, timestamp: int, versions: list[str]):
+    self.timestamp = timestamp
+    self.versions = versions
         
 class DatabaseController():
     """
@@ -40,8 +52,14 @@ class DatabaseController():
     def __init__(self, client: AsyncIOMotorClient, database: AsyncIOMotorDatabase, fs_bucket: AsyncIOMotorGridFSBucket):
       self.db_client = client
       self.database = database
-      self.models_collection = self.database["models"]
       self.fs = fs_bucket
+      self.models_collection = self.database["models"]
+      self.mlflow_deployments_collection = self.database["mlflow_deployments"]
+
+    async def create_indices(self):
+      await self.mlflow_deployments_collection.create_index("timestamp")
+      await self.models_collection.create_index("mlflow_uri", unique=True, partialFilterExpression={"mlflow_uri": {"$type": "string"}}
+)
 
     def debug(self):
       return "Live DB Controller"
@@ -77,6 +95,16 @@ class DatabaseController():
       Updates a model metadata in the database.
       """
       return await self.models_collection.update_one(query, update)
+    
+    async def get_latest_mlflow_deployment(self) -> MLflowDeployment | None:
+      doc = await self.mlflow_deployments_collection.find_one({}, sort=[("timestamp", -1)])
+      if doc:
+        return MLflowDeployment(timestamp=doc["timestamp"], versions=doc["versions"])
+      return None
+    
+    async def insert_mlflow_deployment(self, timestamp: int, versions: list[str]):
+      doc = MLflowDeployment(timestamp=timestamp, versions=versions).__dict__
+      await self.mlflow_deployments_collection.insert_one(doc)
       
 
 db_client: AsyncIOMotorClient = None
@@ -91,7 +119,8 @@ async def connect_to_mongo():
   db_database = db_client[DB_NAME]
   db_gridfs = AsyncIOMotorGridFSBucket(db_database)
   db_controller = DatabaseController(db_client, db_database, db_gridfs)
-  print(f"Successfully connected to MongoDB at {MONGO_URI} and initialized GridFS for '{DB_NAME}'.")
+  await db_controller.create_indices()
+  logger.info(f"Successfully connected to MongoDB at {MONGO_URI} and initialized GridFS for '{DB_NAME}'.")
 
 
 async def close_mongo_connection():
@@ -99,7 +128,7 @@ async def close_mongo_connection():
   global db_client
   if db_client:
       db_client.close()
-      print("MongoDB connection closed.")
+      logger.info("MongoDB connection closed.")
 
 
 def get_gridfs_bucket() -> AsyncIOMotorGridFSBucket:

@@ -67,13 +67,13 @@ def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 
 
         # 6. Set a description for the registered model version
         client = mlflow.tracking.MlflowClient()
-        if alias:
-            client.set_registered_model_alias(model_name, alias, model_info.version)
         # Get the latest version of the registered model
         # Note: This might be tricky if two runs register at the same time.
         # For local testing, it's usually fine. In production, consider explicit versioning or waits.
         try:
             latest_version = client.get_latest_versions(model_name, stages=["None"])[0].version
+            if alias:
+                client.set_registered_model_alias(model_name, alias, latest_version)
             client.update_model_version(
                 name=model_name,
                 version=latest_version,

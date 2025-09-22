@@ -24,13 +24,11 @@ async def lifespan(app: FastAPI):
 # Create the main FastAPI app
 app = FastAPI(lifespan=lifespan)
 
-print(f"Environment variable NEXON_MONGO_HOST: {os.getenv('NEXON_MONGO_HOST')}")
-
 # Mount the inference API to the main app (if modularized)
 app.mount("/inference", inference_app)
 app.mount("/deployment", deployment_app)
 app.mount("/upload", upload_app)
-app.mount("/api/v1/mlflow", mlflow_app)
+app.mount("/api/mlflow", mlflow_app)
 app.mount("/", model_app)
 
 # Add CORS middleware
