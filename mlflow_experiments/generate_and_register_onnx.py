@@ -19,7 +19,7 @@ from skl2onnx.common.data_types import FloatTensorType
 
 mlflow.set_experiment("ONNX Model Generation Experiment")
 
-def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 3), alias: str = None, tags: dict = None):
+def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 3), alias: str = None, tags: dict = {}):
     """
     Trains a simple scikit-learn model, converts it to ONNX,
     logs it to MLflow, and registers it in the Model Registry.
@@ -74,6 +74,9 @@ def create_and_log_onnx_model(model_name, version_description, input_shape=(10, 
             latest_version = client.get_latest_versions(model_name, stages=["None"])[0].version
             if alias:
                 client.set_registered_model_alias(model_name, alias, latest_version)
+            if tags:
+              for key, value in tags.items():
+                client.set_model_version_tag(model_name, version=latest_version, key=key, value=value)
             client.update_model_version(
                 name=model_name,
                 version=latest_version,
@@ -107,41 +110,81 @@ if __name__ == "__main__":
     # print(f"\nModel 'MyLinearRegressionONNX' version logged from run {run_id_v2}.")
     
     
-    run_id_v1 = create_and_log_onnx_model(
+    run_id_a_1 = create_and_log_onnx_model(
         "model_a",
         "model_a v1.",
         input_shape=(100, 5),
-        tags={"project": "test", "type": "regression"}
     )
-    print(f"\nModel 'model_a' version logged from run {run_id_v1}.")
+    print(f"\nModel 'model_a' version logged from run {run_id_a_1}.")
     
     
-    run_id_v2 = create_and_log_onnx_model(
+    run_id_a_2 = create_and_log_onnx_model(
         "model_a",
         "model_a v2.",
-        input_shape=(100, 5),
-        tags={"project": "anothertest", "type": "regression"}
-    )
-    print(f"\nModel 'model_a' version logged from run {run_id_v2}.")
-
-
-    run_id_b_sta = create_and_log_onnx_model(
-        "model_b",
-        "Stable version of model_b.",
-        input_shape=(100, 5),
-        tags={"type": "regression"},
-        alias="stable"
-    )
-    print(f"\nModel 'model_b' version logged from run {run_id_b_sta}.")
-
-
-    run_id_b_ex = create_and_log_onnx_model(
-        "model_b",
-        "Experimental version of model_b.",
-        input_shape=(100, 5),
-        tags={"type": "regression"},
+        input_shape=(150, 7),
         alias="experimental"
     )
-    print(f"\nModel 'model_b' version logged from run {run_id_b_ex}.")
+    print(f"\nModel 'model_a' version logged from run {run_id_a_2}.")
+
+
+    run_id_b_1 = create_and_log_onnx_model(
+        "model_b",
+        "model_b v1.",
+        input_shape=(100, 5),
+    )
+    print(f"\nModel 'model_b' version logged from run {run_id_b_1}.")
+
+
+    run_id_b_2 = create_and_log_onnx_model(
+        "model_b",
+        "model_b v2.",
+        input_shape=(150, 7),
+        tags={"project": "new_product"},
+        alias="stable"
+    )
+    print(f"\nModel 'model_b' version logged from run {run_id_b_2}.")
+    
+    
+    run_id_b_3 = create_and_log_onnx_model(
+        "model_b",
+        "model_b v3.",
+        input_shape=(170, 9),
+        tags={"project": "new_product"},
+    )
+    print(f"\nModel 'model_b' version logged from run {run_id_b_3}.")
+    
+    
+    run_id_c_1 = create_and_log_onnx_model(
+        "model_c",
+        "model_c v1.",
+        input_shape=(100, 5),
+    )
+    print(f"\nModel 'model_c' version logged from run {run_id_c_1}.")
+    
+    
+    run_id_c_2 = create_and_log_onnx_model(
+        "model_c",
+        "model_c v2.",
+        input_shape=(150, 7),
+        tags={"stage": "production"},
+    )
+    print(f"\nModel 'model_c' version logged from run {run_id_c_2}.")
+
+
+    run_id_d_1 = create_and_log_onnx_model(
+        "model_d",
+        "model_d v1.",
+        input_shape=(100, 5),
+    )
+    print(f"\nModel 'model_d' version logged from run {run_id_d_1}.")
+
+
+    run_id_d_2 = create_and_log_onnx_model(
+        "model_d",
+        "model_d v2.",
+        input_shape=(150, 7),
+        tags={"stage": "production"},
+    )
+    print(f"\nModel 'model_d' version logged from run {run_id_d_2}.")
 
     print("\nScript finished. Check the MLflow UI at http://localhost:5000 to see your runs and registered models.")
