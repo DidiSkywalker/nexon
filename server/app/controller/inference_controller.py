@@ -19,20 +19,33 @@ class InferenceController:
   def __init__(self, db_controller: DatabaseController):
     self.db_controller = db_controller
 
-  async def infer(self, model_name: str, request: InferenceRequest):
+  async def infer(self, request: InferenceRequest, model_name: str, model_version: int = None):
     """
     Runs inference on the uploaded ONNX model with the given inputs.
     """
-    models = await self.db_controller.find({"name": model_name})
-    if not models:
-      raise NotFoundError("No model with this name has been uploaded")
     file_id = None
-    for model in models:
-      if model["status"] == STATUS_DEPLOYED:
-          file_id = model["file_id"]
-          break
-    if file_id == None:
-      raise NotFoundError("No model with this name has been deployed")
+    if model_version:
+      model = await self.db_controller.find_one({"name": f"{model_name}", "version": model_version, "status": STATUS_DEPLOYED})
+      if model:
+        file_id = model["file_id"]
+      else:
+        raise NotFoundError("No model with this name and version has been deployed")
+    else:
+      models = await self.db_controller.find({"name": model_name, "status": STATUS_DEPLOYED}, sort=[("version", -1)])
+      if not models:
+        raise NotFoundError("No model with this name has been deployed")
+      file_id = models[0]["file_id"]
+      
+    # models = await self.db_controller.find({"name": model_name})
+    # if not models:
+    #   raise NotFoundError("No model with this name has been uploaded")
+    # file_id = None
+    # for model in models:
+    #   if model["status"] == STATUS_DEPLOYED:
+    #       file_id = model["file_id"]
+    #       break
+    # if file_id == None:
+    #   raise NotFoundError("No model with this name has been deployed")
         
     try:
       grid_out = await self.db_controller.download_file(file_id=ObjectId(file_id))
