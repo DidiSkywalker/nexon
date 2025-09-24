@@ -15,10 +15,16 @@ from mlflow.entities.model_registry import RegisteredModel
 from app.controller.database import DatabaseController, ModelMetadata
 from app.util.constants import STATUS_DEPLOYED, STATUS_DOWNLOADING, STATUS_UPLOADED
 from app.util.file_utils import convert_size
+from app.controller.deployment_controller import get_inference_endpoint
 
 logger = logging.getLogger("uvicorn")
 
 BASE_URL = "http://localhost:3000"
+
+VERSION_STATE_DOWNLOADING = "downloading"
+VERSION_STATE_DEPLOYING = "deploying"
+VERSION_STATE_UNDEPLOYING = "undeploying"
+VERSION_STATE_AVAILABLE = "available"
 
 STATE_QUEUED = "queued"
 STATE_ERROR = "error"
@@ -27,19 +33,27 @@ STATE_EXISTS = "exists"
 class SyncResultEntry(BaseModel):
     model_name: str
     version_selector: str
-    status: str
+    success: bool
     details: Optional[str] = None
-    versions: List[str] = []
+    resolved_versions: List[str] = []
 
 def not_found_result(model_name: str, version_selector: str):
-    return SyncResultEntry(model_name=model_name, version_selector=version_selector, status=STATE_ERROR, details="Model not found")
+    return SyncResultEntry(model_name=model_name, version_selector=version_selector, success=False, details="Model not found")
 
-def queued_result(model_name: str, version_selector: str, versions: List[str], details: str = None):
-    return SyncResultEntry(model_name=model_name, version_selector=version_selector, status=STATE_QUEUED, versions=versions, details=details)
+def invalid_selector_result(model_name: str, version_selector: str):
+    return SyncResultEntry(model_name=model_name, version_selector=version_selector, success=False, details="Invalid version selector")
+
+def success_result(model_name: str, version_selector: str, versions: List[str], details: str = None):
+    return SyncResultEntry(model_name=model_name, version_selector=version_selector, success=True, resolved_versions=versions, details=details)
+
+class VersionResultEntry(BaseModel):
+    version: str
+    status: str
 
 class QueuedModelInfos():
-    def __init__(self, model_name: str, model_version: str, model_uri: str, source_selectors: List[str], nexon_id: str = None):
+    def __init__(self, model_name: str, model_version: str, model_uri: str, source_selectors: List[str], nexon_id: str = None, exists: bool = False):
         self.nexon_id = nexon_id
+        self.exists = exists
         self.model_name = model_name
         self.model_version = model_version
         self.model_uri = model_uri
@@ -49,10 +63,9 @@ class SyncModelsRequest(BaseModel):
     models: List[Tuple[str, str]]  # List of tuples (model_name, version_specifier)
     
 class SyncModelsResponse(BaseModel):
-    has_errors: bool
-    queued_models: int = 0
-    skipped_models: int = 0
+    error_count: int = 0
     results: List[SyncResultEntry] = []
+    versions: List[VersionResultEntry] = []
 
 class MLFlowSyncController:
     def __init__(self):
@@ -97,9 +110,9 @@ class MLFlowSyncController:
             elif (version_selector.isdigit()):
               result = await self.find_version_uri_by_version(model_name, version_selector)
             else:
-              result = SyncResultEntry(model_name=model_name, version_selector=version_selector, status=STATE_ERROR, details="Invalid version selector")
+              result = invalid_selector_result(model_name, version_selector)
               
-            for version_uri in result.versions:
+            for version_uri in result.resolved_versions:
               if version_uri not in versions_to_deploy:
                 versions_to_deploy[version_uri] = QueuedModelInfos(model_name, version_uri.split("/")[-1], version_uri, [full_selector])
               else:
@@ -107,8 +120,8 @@ class MLFlowSyncController:
           except Exception as e:
             logger.warning(f"Failed to find MLflow version for {model_name} - {version_selector}: {e}")
             traceback.print_exc()
-            result or not_found_result(model_name, version_selector)
-            
+            result = not_found_result(model_name, version_selector)
+
           self._push_result(sync_models_response, result)
      
       resolved_versions = set(versions_to_deploy.keys())
@@ -131,9 +144,18 @@ class MLFlowSyncController:
           logger.info(f"Inserting new model to deploy: {uri}")
           existing_model = await self._find_model_in_db(db_controller, versions_to_deploy[uri].model_name, versions_to_deploy[uri].model_version)
           if not existing_model:
+            sync_models_response.versions.append(VersionResultEntry(version=uri, status=VERSION_STATE_DOWNLOADING))
             await self._insert_model_in_db(db_controller, versions_to_deploy[uri])
           else:
+            sync_models_response.versions.append(VersionResultEntry(version=uri, status=VERSION_STATE_DEPLOYING))
             versions_to_deploy[uri].nexon_id = existing_model["_id"]
+            versions_to_deploy[uri].exists = True
+      
+      for uri in removed_versions:
+          sync_models_response.versions.append(VersionResultEntry(version=uri, status=VERSION_STATE_UNDEPLOYING))
+          
+      for uri in persistent_versions:
+          sync_models_response.versions.append(VersionResultEntry(version=uri, status=VERSION_STATE_AVAILABLE))
       
       logger.info(f"Starting background task to download and deploy models.")
       added_model_infos = [versions_to_deploy[uri] for uri in added_versions]
@@ -142,7 +164,7 @@ class MLFlowSyncController:
 
       await db_controller.insert_mlflow_deployment(timestamp=int(datetime.now().timestamp()), versions=list(resolved_versions))
       
-      if (sync_models_response.has_errors and sync_models_response.queued_models > 0):
+      if (sync_models_response.error_count > 0):
         api_response.status_code = 207
       return sync_models_response
     
@@ -151,7 +173,7 @@ class MLFlowSyncController:
       now = datetime.now()
       upload_date = f"{now.day}/{now.month}/{now.year}"
       model_metadata = ModelMetadata(
-        name= f"{queued_model_info.model_name}",
+        name= queued_model_info.model_name,
         upload= upload_date,
         version= int(queued_model_info.model_version),
         status= STATUS_DOWNLOADING,
@@ -167,11 +189,8 @@ class MLFlowSyncController:
     
     def _push_result(self, response: SyncModelsResponse, result: SyncResultEntry):
       response.results.append(result)
-      if result.status == STATE_ERROR:
-        response.has_errors = True
-        response.skipped_models += 1
-      else:
-        response.queued_models += 1
+      if not result.success:
+        response.error_count += 1
 
     def _get_registered_model(self, model_name: str) -> Optional[RegisteredModel]:
       try:
@@ -196,7 +215,7 @@ class MLFlowSyncController:
           return not_found_result(model_name, version_selector)
       version = latest_versions[0].version
       version_uri = f"models:/{model_name}/{version}"
-      return queued_result(model_name, version_selector, [version_uri])
+      return success_result(model_name, version_selector, [version_uri])
 
     async def find_version_uri_by_version(self, model_name: str, version_selector: str):
       """
@@ -209,7 +228,7 @@ class MLFlowSyncController:
       registered_model = self._get_registered_model(model_name)
       if not registered_model:
           return not_found_result(model_name, version_selector)
-      return queued_result(model_name, version_selector, [version_uri])
+      return success_result(model_name, version_selector, [version_uri])
 
     async def find_version_uri_by_alias(self, model_name: str, version_selector: str):
       """
@@ -223,7 +242,7 @@ class MLFlowSyncController:
       if not version:
           return not_found_result(model_name, version_selector)
       version_uri = f"models:/{model_name}/{version.version}"
-      return queued_result(model_name, version_selector, [version_uri])
+      return success_result(model_name, version_selector, [version_uri])
 
     async def find_version_uri_by_tag(self, model_name: str, version_selector: str):
       """
@@ -237,34 +256,38 @@ class MLFlowSyncController:
       versions = []
       for v in tagged_versions:
           versions.append(f"models:/{model_name}/{v.version}")
-      return queued_result(model_name, version_selector, versions, details=f"Found {len(tagged_versions)} tagged versions.")
+      return success_result(model_name, version_selector, versions, details=f"Found {len(tagged_versions)} tagged versions.")
 
     async def background_task_download_and_deploy_models(self, added_models: List[QueuedModelInfos], removed_models: List[str], persistent_models: List[QueuedModelInfos], db_controller: DatabaseController):
       logger.info(f"Downloading added models...")
+
       for model_infos in added_models:
-        try:
-          logger.info(f"Downloading and deploying model: {model_infos.model_uri} [{model_infos.nexon_id}]")
-          artifacts = mlflow.artifacts.list_artifacts(model_infos.model_uri)
-          for artifact in artifacts:
-            if artifact.path.endswith(".onnx"):
-              logger.debug(f"Found ONNX artifact: {artifact.path}")
-              with tempfile.TemporaryDirectory() as tmpdir:
-                logger.debug(f"Temporary directory created: {tmpdir}")
-                logger.debug(f"Downloading model artifact from URI: {model_infos.model_uri}")
-                artifact_uri = f"{model_infos.model_uri}/{artifact.path}"
-                download_result = mlflow.artifacts.download_artifacts(
-                    artifact_uri=artifact_uri,
-                    dst_path=tmpdir
-                )
-                local_file_path = os.path.join(tmpdir, artifact.path)
-                logger.debug(f"Model downloaded to '{local_file_path}': {download_result}")
-                await self.upload_and_update_model(model_infos, local_file_path, artifact.path, db_controller)
-        except Exception as e:
-          logger.error(f"Error downloading and deploying model {model_infos.model_name} version {model_infos.model_version}: {e}")
-          import traceback
-          traceback.print_exc()
+        if not model_infos.exists:
+          try:
+            logger.info(f"Downloading and deploying model: {model_infos.model_uri} [{model_infos.nexon_id}]")
+            artifacts = mlflow.artifacts.list_artifacts(model_infos.model_uri)
+            for artifact in artifacts:
+              if artifact.path.endswith(".onnx"):
+                logger.debug(f"Found ONNX artifact: {artifact.path}")
+                with tempfile.TemporaryDirectory() as tmpdir:
+                  logger.debug(f"Temporary directory created: {tmpdir}")
+                  logger.debug(f"Downloading model artifact from URI: {model_infos.model_uri}")
+                  artifact_uri = f"{model_infos.model_uri}/{artifact.path}"
+                  download_result = mlflow.artifacts.download_artifacts(
+                      artifact_uri=artifact_uri,
+                      dst_path=tmpdir
+                  )
+                  local_file_path = os.path.join(tmpdir, artifact.path)
+                  logger.debug(f"Model downloaded to '{local_file_path}': {download_result}")
+                  await self.upload_and_update_model(model_infos, local_file_path, artifact.path, db_controller)
+          except Exception as e:
+            logger.error(f"Error downloading and deploying model {model_infos.model_name} version {model_infos.model_version}: {e}")
+            import traceback
+            traceback.print_exc()
+        else:
+          await self._set_model_deployed_in_db(db_controller, model_infos.nexon_id, model_infos)
       
-      logger.info(f"Undeploying removed models {removed_models}")
+      logger.info(f"Undeploying removed models...")
       for version_uri in removed_models:
         logger.info(f"Undeploying model: {version_uri}")
         try:
@@ -281,16 +304,21 @@ class MLFlowSyncController:
           import traceback
           traceback.print_exc()
       
-      logger.info(f"Updating persistent models {persistent_models}")
+      logger.info(f"Updating persistent models...")
       for model_infos in persistent_models:
         logger.info(f"Updating model: {model_infos.model_uri}")
         try:
           model = await self._find_model_in_db(db_controller, model_infos.model_name, model_infos.model_version)
           if model:
-            await db_controller.update_one(
-              {"_id": ObjectId(model["_id"])},
-              {"$set": {"mlflow_source_selectors": model_infos.source_selectors}},
-            )
+            if (model.get("status") == STATUS_DEPLOYED):
+              await db_controller.update_one(
+                {"_id": ObjectId(model["_id"])},
+                {"$set": {
+                  "mlflow_source_selectors": model_infos.source_selectors,
+                  }},
+              )
+            else:
+              await self._set_model_deployed_in_db(db_controller, model["_id"], model_infos)
           else:
             logger.warning(f"Cannot update model {model_infos.model_name} version {model_infos.model_version}: Not found.")
         except Exception as e:
@@ -309,7 +337,7 @@ class MLFlowSyncController:
           file_size_bytes = os.fstat(file_stream.fileno()).st_size
           logger.debug(f"File size (bytes): {file_size_bytes}")
           file_size_readable = convert_size(file_size_bytes)
-          api_endpoint = f"{BASE_URL}/inference/infer/{model_infos.model_name}"
+          api_endpoint = get_inference_endpoint(model_infos.model_name, int(model_infos.model_version))
           logger.debug(f"Nexon Model ID: {model_infos.nexon_id}, File ID: {file_id}, Deploy Date: {deploy_date}, API Endpoint: {api_endpoint}")
           updated_result = await db_controller.update_one(
             {"_id": ObjectId(model_infos.nexon_id)},
@@ -324,3 +352,16 @@ class MLFlowSyncController:
           )
           logger.debug(f"Model metadata updated in database: {updated_result}")
           
+    async def _set_model_deployed_in_db(self, db_controller: DatabaseController, nexon_id: str, model_infos: QueuedModelInfos):
+      now = datetime.now()
+      deploy_date = f"{now.day}/{now.month}/{now.year}"
+      api_endpoint = get_inference_endpoint(model_infos.model_name, int(model_infos.model_version))
+      await db_controller.update_one(
+        {"_id": ObjectId(nexon_id)},
+        {"$set": {
+          "mlflow_source_selectors": model_infos.source_selectors,
+          "status": STATUS_DEPLOYED,
+          "deploy": deploy_date,
+          "endpoint": api_endpoint,
+          }},
+      )

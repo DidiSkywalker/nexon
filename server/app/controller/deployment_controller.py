@@ -14,6 +14,11 @@ class DeployRequest(BaseModel):
 class UndeployRequest(BaseModel):
     model_name: str
     model_version: int     
+    
+def get_inference_endpoint(model_name: str, model_version: int = None) -> str:
+    if model_version:
+        return f"{BASE_URL}/inference/infer/{model_name}/{model_version}"
+    return f"{BASE_URL}/inference/infer/{model_name}"
       
 class DeploymentController:
   def __init__(self, db_controller: DatabaseController):
@@ -34,7 +39,7 @@ class DeploymentController:
             raise BadRequestError("Another version of this model is already deployed!")
 
       date = f"{datetime.now().day}/{datetime.now().month}/{datetime.now().year}"
-      api_endpoint = f"{BASE_URL}/inference/infer/{request.model_name}"
+      api_endpoint = get_inference_endpoint(request.model_name)
       updated_result = await self.db_controller.update_one(
           {"_id": model_id},
           {"$set": {"status": STATUS_DEPLOYED, "deploy": date, "endpoint": api_endpoint}},
