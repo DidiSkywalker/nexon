@@ -31,7 +31,7 @@ docker compose -f nexon-compose.yml up --build -d
 ```
 
 ### 4. Use integration
-- Check [MLflow](http://localhost:/#/models) to make sure the initial models are registered
+- Check [MLflow](http://localhost:5000/#/models) to make sure the initial models are registered
 - Run example requests from the `examples/` directory. 
 
 ```bash
