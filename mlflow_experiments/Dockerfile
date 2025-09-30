@@ -10,5 +10,5 @@ FROM python:3.13.5-slim-bookworm
 WORKDIR /app
 
 # Install dependencies for model generation and MLflow client
-COPY requirements.txt .
+COPY . .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -16,8 +16,6 @@ services:
       MLFLOW_ARTIFACTS_DESTINATION: s3://${AWS_BUCKET_NAME}/
       MLFLOW_SERVER_ARTIFACT_DESTINATION: s3://${AWS_BUCKET_NAME}/
       AWS_ENDPOINT_URL: http://s3:9000
-    # volumes:
-    #   - mlflow_data:/artifacts # Mount a named volume for persistent data
     depends_on:
       - mysqldb
     healthcheck:
@@ -37,7 +35,6 @@ services:
       - mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysqldb:3306/${MYSQL_DATABASE}
       - --registry-store-uri
       - mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysqldb:3306/${MYSQL_DATABASE}
-      #- --serve-artifacts
       - --default-artifact-root
       - s3://${AWS_BUCKET_NAME}/
       - --artifacts-destination
@@ -55,13 +52,10 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_DEFAULT_REGION: ${AWS_REGION}
       MLFLOW_S3_ENDPOINT_URL: http://s3:9000
-    volumes:
-      - ./mlflow_experiments/generate_and_register_onnx.py:/app/generate_and_register_onnx.py
-      # - mlflow_data:/artifacts # Mount a named volume for persistent data
     depends_on:
       mlflow-tracking-server:
         condition: service_healthy
-    command: python /app/generate_and_register_onnx.py
+    command: python /app/run_experiments.py
     networks:
       - internal
       - mlflow
