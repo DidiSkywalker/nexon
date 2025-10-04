@@ -49,6 +49,15 @@ class ModelController:
           # Delete model metadata
           delete_result = await self.db_controller.delete_one({"_id": model["_id"]})
 
+          # Remove manually deleted model from latest deployment state
+          mlflow_uri = model.get("mlflow_uri")
+          if mlflow_uri is not None:
+            latest_deployment = await self.db_controller.get_latest_mlflow_deployment()
+            if latest_deployment and mlflow_uri in latest_deployment.versions:
+              await self.db_controller.mlflow_deployments_collection.update_one(
+                {"timestamp": latest_deployment.timestamp},
+                {"$pull": {"versions": mlflow_uri}}
+              )
           if delete_result.deleted_count == 1:
               return {"message": f"Model '{model_name}' deleted successfully"}
           else:
