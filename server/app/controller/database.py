@@ -67,6 +67,9 @@ class DatabaseController():
     async def find(self, *args: any):
       return await self.models_collection.find(*args).to_list(None)
     
+    async def find_and_sort(self, query, sort):
+      return await self.models_collection.find(query).sort(sort).to_list(None)
+    
     async def find_one(self, query, sort=None):
       return await self.models_collection.find_one(query, sort=sort)
     

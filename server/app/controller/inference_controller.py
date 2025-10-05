@@ -24,14 +24,14 @@ class InferenceController:
     Runs inference on the uploaded ONNX model with the given inputs.
     """
     file_id = None
-    if model_version:
+    if model_version is not None:
       model = await self.db_controller.find_one({"name": f"{model_name}", "version": model_version, "status": STATUS_DEPLOYED})
       if model:
         file_id = model["file_id"]
       else:
         raise NotFoundError("No model with this name and version has been deployed")
     else:
-      models = await self.db_controller.find({"name": model_name, "status": STATUS_DEPLOYED}, sort=[("version", -1)])
+      models = await self.db_controller.find_and_sort({"name": model_name, "status": STATUS_DEPLOYED}, [("version", -1)])
       if not models:
         raise NotFoundError("No model with this name has been deployed")
       file_id = models[0]["file_id"]
